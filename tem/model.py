@@ -21,6 +21,7 @@ class AttentivePooling(nn.Module):
         self.k_proj = nn.Linear(d_in, d_out, bias=False)
         self.v_proj = nn.Linear(d_in, d_out, bias=False)
         # TODO: by theory we do not need an out_proj, but could be helpful?
+        self.reset_parameters()
 
     def reset_parameters(self):
         nn.init.normal_(self.q)
