@@ -8,6 +8,7 @@ from tem.model import TEMModel
 from tem.em import GaussianMixtureEM
 from tem.spectral import GaussianMixtureSpectral
 from tem.logger import logger
+from tem.utils import seed_everything
 
 
 def setup_cfg(**kwargs):
@@ -27,6 +28,7 @@ def setup_cfg(**kwargs):
     cfg.model.n_layer = kwargs.get("n_layer", 12)
     cfg.model.n_head = kwargs.get("n_head", 4)
     cfg.train = {}
+    cfg.train.seed = kwargs.get("seed", 42)
     cfg.train.batch_size = kwargs.get("batch_size", 64)
     cfg.train.eval_every = kwargs.get("eval_every", 1000)
     cfg.train.learning_rate = kwargs.get("learning_rate", 1e-3)
@@ -71,6 +73,7 @@ def evaluate(task, model, cfg, step):
 
 def train(cfg):
     r"""Training pipeline"""
+    seed_everything(cfg.train.seed)
     # Initialize task
     task = IsotropicGaussianMixtureTask(
         n_components=cfg.task.n_components,
