@@ -2,13 +2,14 @@ import torch
 import torch.nn.functional as F
 import tensorly as tl
 
-from .logger import logger
+from ..logger import logger
+from .base import _BatchFitMixin
 
 
 tl.set_backend('pytorch')
 
 
-class GaussianMixtureSpectral(object):
+class GaussianMixtureSpectral(_BatchFitMixin):
     r"""A python implementation of the algorithm in the paper
 
     **Learning mixtures of spherical Gaussians: moment methods and spectral decompositions**
@@ -27,7 +28,7 @@ class GaussianMixtureSpectral(object):
         self.normalize_weights = normalize_weights
         self.tensor_factorizer = tl.decomposition.SymmetricCP(rank=self.n_components, **kwargs)
 
-    def fit(self, X):
+    def fit(self, X, *args, **kwargs):
         r"""The fitting procedure
 
         Args:
@@ -80,4 +81,4 @@ class GaussianMixtureSpectral(object):
         w_hat = 1 / (w ** 2)
         if self.normalize_weights:
             w_hat = F.normalize(w_hat, dim=0, p=1)
-        return w_hat, mu_hat.T
+        return w_hat, mu_hat.T, torch.sqrt(sigma_sqr_est)

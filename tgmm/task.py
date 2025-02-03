@@ -1,0 +1,129 @@
+from dataclasses import dataclass
+
+import torch
+import torch.nn.functional as F
+
+from .utils import default_device, _cos, _l2
+
+
+class Task(object):
+    r"""Base class for task objects."""
+
+    def sample(self, n_sample, batch_size, *args, **kwargs):
+        raise NotImplementedError
+
+
+@dataclass
+class IsotropicGaussianMixtureSample(object):
+    r"""For holding an isotropic Gaussian sample"""
+
+    mixture_probs: torch.Tensor
+    assignment: torch.Tensor
+    gaussian_means: torch.Tensor
+    sample: torch.Tensor
+    scale: torch.Tensor
+
+    def to(self, device):
+        return IsotropicGaussianMixtureSample(
+            mixture_probs=self.mixture_probs.to(device),
+            assignment=self.assignment.to(device),
+            gaussian_means=self.gaussian_means.to(device),
+            sample=self.sample.to(device),
+            scale=self.scale.to(device),
+        )
+
+
+@dataclass
+class IsotropicGaussianMixtureTask(Task):
+    r"""Task for sampling IsotropicGaussianMixture.
+
+    **Notes**
+    Memos for reasonable sampling of Gaussian mixtures
+    - Components shall NOT be two close
+    - Mixture probabilities shall NOT be two extreme
+    """
+
+    n_components: int
+    dim: int
+    scale: float = None
+    _default_scale: float = 1.
+
+    def _sample_mean(self, batch_size):
+        # TODO: too much heuristics here, can we be more rigorous?
+        _batch_size = 4 * batch_size  # Expand batch size to create some buffer
+        gaussian_means = (torch.rand(_batch_size, self.dim, self.n_components) - 0.5) * 10
+        self_sim = -_cos(gaussian_means.permute(0, 2, 1), gaussian_means.permute(0, 2, 1))
+        mask = ~torch.eye(self.n_components, dtype=torch.bool)
+        mask = mask.unsqueeze(0).expand(_batch_size, -1, -1)
+        off_diagonal_entries = self_sim[mask].view(_batch_size, -1)
+        indices, = torch.where(off_diagonal_entries.max(dim=-1)[0] < 0.8)
+        return gaussian_means[indices][:batch_size, :, :]
+
+    def _sample_mixture_probs(self, batch_size):
+        return F.normalize(
+            torch.sort(
+                torch.rand(batch_size, self.n_components) * 0.6 + 0.2,
+                dim=-1
+            )[0],
+            p=1,
+        )
+
+    def _sample_scale(self, batch_size):
+        r"""Sample a batch of isotropic Gaussian scales"""
+        # TODO: enable custom samplers
+        scale = self.scale or self._default_scale
+        return torch.ones(batch_size) * scale
+
+    def _sample(self, n_sample, batch_size, mixture_probs, gaussian_means, scale):
+        assignment = torch.multinomial(
+            mixture_probs, n_sample, replacement=True
+        )  # [batch_size, n_sample]
+        assignment_one_hot = F.one_hot(
+            assignment, self.n_components
+        ).float()  # [batch_size, n_sample, n_components]
+        _sample = torch.randn(
+            batch_size, n_sample, self.dim, self.n_components
+        ) * scale.view(-1, 1, 1, 1) + gaussian_means.unsqueeze(1)
+        sample = torch.einsum("bndk,bnk->bnd", _sample, assignment_one_hot)
+        return IsotropicGaussianMixtureSample(
+            mixture_probs=mixture_probs.to(default_device),
+            assignment=assignment.to(default_device),
+            gaussian_means=torch.permute(gaussian_means.to(default_device), (0, 2, 1)),
+            sample=sample.to(default_device),
+            scale=scale.to(default_device),
+        )
+
+    def resample_from(
+        self,
+        task_sample: IsotropicGaussianMixtureSample,
+        n_sample=None,
+        batch_size=None,
+    ):
+        _batch_size, _n_sample, _ = task_sample.sample.size()
+        n_sample = n_sample or _n_sample
+        batch_size = batch_size or _batch_size
+        return self._sample(
+            n_sample=n_sample,
+            batch_size=batch_size,
+            mixture_probs=task_sample.mixture_probs,
+            gaussian_means=task_sample.gaussian_means,
+            scale=task_sample.scale,
+        )
+
+    def sample(
+        self,
+        n_sample,
+        batch_size,
+        *args,
+        **kwargs
+    ):
+        mixture_probs = self._sample_mixture_probs(batch_size)
+        gaussian_means = self._sample_mean(batch_size)
+        scale = self._sample_scale(batch_size)
+        return self._sample(
+            n_sample,
+            batch_size,
+            mixture_probs,
+            gaussian_means,
+            scale,
+        )

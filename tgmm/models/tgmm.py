@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import GPT2Model, GPT2Config
 
-from .task import IsotropicGaussianMixtureSample, IsotropicGaussianMixtureTask
-from .utils import default_device
+from tgmm.task import IsotropicGaussianMixtureSample, IsotropicGaussianMixtureTask
+from tgmm.utils import default_device
 
 
 class AttentivePooling(nn.Module):
@@ -30,7 +30,7 @@ class AttentivePooling(nn.Module):
         r"""Pool x using an attentive fashion
 
         Args:
-            x (torch.Tensor): input tensor of shape [batch_size, seq_len, d_in]
+            x (torch.Tensor): input tensor of shape [batch_size, n_sample, d_in]
 
         Returns:
             torch.Tensor: output tensor of shape [batch_size, n_out, d_out]
@@ -42,7 +42,7 @@ class AttentivePooling(nn.Module):
 
 
 @dataclass
-class TEMOutput(object):
+class TGMMOutput(object):
     r"""For wrapping outputs of TEMModel"""
 
     h: torch.Tensor
@@ -52,7 +52,7 @@ class TEMOutput(object):
     mu_loss: torch.Tensor
 
 
-class TEMModel(nn.Module):
+class TGMMModel(nn.Module):
     r"""A wrapper of huggingface impl of GPT-2 model"""
 
     def __init__(
@@ -63,7 +63,7 @@ class TEMModel(nn.Module):
         n_layer=12,
         n_head=4,
     ):
-        super(TEMModel, self).__init__()
+        super(TGMMModel, self).__init__()
         # TODO: Allow more transformer configurations
         transformer_config = GPT2Config(
             n_positions=n_positions,
@@ -98,10 +98,10 @@ class TEMModel(nn.Module):
         h = self.transformer(inputs_embeds=embeds).last_hidden_state
         out_combn = self.read_out(h)
         alpha_est = out_combn[:, :, : self.n_components].mean(dim=1)
-        mu_est = torch.permute(out_combn[:, :, self.n_components :], (0, 2, 1))
+        mu_est = out_combn[:, :, self.n_components :]
         alpha_loss_val = self.alpha_loss(alpha_est, inputs.mixture_probs)
         mu_loss_val = self.mu_loss(mu_est, inputs.gaussian_means)
-        return TEMOutput(
+        return TGMMOutput(
             alpha_loss=alpha_loss_val,
             mu_loss=mu_loss_val,
             alpha_est=alpha_est,
