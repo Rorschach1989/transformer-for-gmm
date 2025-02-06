@@ -1,3 +1,4 @@
+from typing import List, Union
 from dataclasses import dataclass
 
 import torch
@@ -22,15 +23,66 @@ class IsotropicGaussianMixtureSample(object):
     gaussian_means: torch.Tensor
     sample: torch.Tensor
     scale: torch.Tensor
+    mask_length: torch.Tensor = None
+    mask_components: torch.Tensor = None
 
     def to(self, device):
-        return IsotropicGaussianMixtureSample(
-            mixture_probs=self.mixture_probs.to(device),
-            assignment=self.assignment.to(device),
-            gaussian_means=self.gaussian_means.to(device),
-            sample=self.sample.to(device),
-            scale=self.scale.to(device),
-        )
+        kwargs = {}
+        for k, v in self.__dict__.items():
+            if v is not None:
+                kwargs[k] = v.to(device)
+        return IsotropicGaussianMixtureSample(**kwargs)
+
+    def pad(self, pad_to_length):
+        batch_size, length = self.mixture_probs.size()
+        if length < pad_to_length:
+            diff = pad_to_length - length
+            _ones = torch.ones_like(
+                self.mixture_probs,
+                device=self.mixture_probs.device
+            )
+            self.mixture_probs = F.pad(
+                self.mixture_probs,
+                (0, diff),
+                mode="constant",
+                value=0.0,
+            )
+            self.gaussian_means = F.pad(
+                self.gaussian_means,
+                (0, 0, 0, diff, 0, 0),
+                mode="constant",
+                value=0.0,
+            )
+            self.mask_components = F.pad(
+                _ones,
+                (0, diff),
+                mode="constant",
+                value=0.0,
+            )
+        else:
+            self.mask_components = torch.ones_like(
+                self.mixture_probs,
+                device=self.mixture_probs.device
+            )
+
+
+def concat_task_sample(sample_list: List[IsotropicGaussianMixtureSample]):
+    pad_to_length = max(item.mixture_probs.size(1) for item in sample_list)
+    for item in sample_list:
+        item.pad(pad_to_length)
+    kwargs = {
+        k: [] for k in sample_list[0].__dict__
+    }
+    for item in sample_list:
+        for k, v in item.__dict__.items():
+            if v is not None:
+                kwargs[k].append(v)
+    for k in list(kwargs):
+        if kwargs[k]:
+            kwargs[k] = torch.cat(kwargs[k], dim=0)
+        else:
+            kwargs[k] = None
+    return IsotropicGaussianMixtureSample(**kwargs)
 
 
 @dataclass
@@ -98,7 +150,7 @@ class IsotropicGaussianMixtureTask(Task):
         task_sample: IsotropicGaussianMixtureSample,
         n_sample=None,
         batch_size=None,
-    ):
+    ):  # TODO: this util might not support mixed components
         _batch_size, _n_sample, _ = task_sample.sample.size()
         n_sample = n_sample or _n_sample
         batch_size = batch_size or _batch_size
@@ -127,3 +179,27 @@ class IsotropicGaussianMixtureTask(Task):
             gaussian_means,
             scale,
         )
+
+
+class MixedComponentGMMTask(Task):
+    r"""Isotropic GMM task that contains a mixture of tasks with
+    different components."""
+
+    def __init__(self, tasks: List[IsotropicGaussianMixtureTask]):
+        dim = tasks[0].dim
+        assert all(task.dim == dim for task in tasks)
+        self.tasks = tasks
+        self.dim = dim
+        self.subtask_components = [task.n_components for task in self.tasks]
+        self.max_n_components = max(self.subtask_components)
+
+    @property
+    def n_subtasks(self):
+        return len(self.tasks)
+
+    def sample(self, n_sample, batch_size, *args, **kwargs):
+        sample_list = [
+            task.sample(n_sample, batch_size, *args, **kwargs)
+            for task in self.tasks
+        ]
+        return concat_task_sample(sample_list)

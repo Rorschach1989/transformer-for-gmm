@@ -5,8 +5,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import GPT2Model, GPT2Config
 
-from tgmm.task import IsotropicGaussianMixtureSample, IsotropicGaussianMixtureTask
-from tgmm.utils import default_device
+from ..task import (
+    IsotropicGaussianMixtureSample,
+    IsotropicGaussianMixtureTask,
+    MixedComponentGMMTask,
+)
+from ..utils import default_device
 
 
 class AttentivePooling(nn.Module):
@@ -76,6 +80,7 @@ class TGMMModel(nn.Module):
             use_cache=False,
         )
         self.task = task
+        self.n_components = self.task.n_components
         n_embd = transformer_config.n_embd
         self.read_in = nn.Linear(self.task.dim, n_embd)
         self.transformer = GPT2Model(transformer_config)
@@ -88,10 +93,6 @@ class TGMMModel(nn.Module):
         self.mu_loss = nn.MSELoss()
         self.to(default_device)
 
-    @property
-    def n_components(self):
-        return self.task.n_components
-
     def forward(self, inputs: IsotropicGaussianMixtureSample):
         x = inputs.sample
         embeds = self.read_in(x)
@@ -100,7 +101,106 @@ class TGMMModel(nn.Module):
         alpha_est = out_combn[:, :, : self.n_components].mean(dim=1)
         mu_est = out_combn[:, :, self.n_components :]
         alpha_loss_val = self.alpha_loss(alpha_est, inputs.mixture_probs)
-        mu_loss_val = self.mu_loss(mu_est, inputs.gaussian_means)
+        mu_loss_val = self.mu_loss(mu_est, inputs.gaussian_means)  # [b, n, d]
+        return TGMMOutput(
+            alpha_loss=alpha_loss_val,
+            mu_loss=mu_loss_val,
+            alpha_est=alpha_est,
+            mu_est=mu_est,
+            h=h,
+        )
+
+
+class MultiTaskTGMMModel(nn.Module):
+    r"""Multi-task version of TGMMModel"""
+
+    def __init__(
+        self,
+        task: MixedComponentGMMTask,
+        n_positions=100,
+        n_embd=128,
+        n_layer=12,
+        n_head=4,
+        n_task_embd=128,
+    ):
+        super(MultiTaskTGMMModel, self).__init__()
+        # TODO: Allow more transformer configurations
+        transformer_config = GPT2Config(
+            n_positions=n_positions,
+            n_embd=n_embd,
+            n_layer=n_layer,
+            n_head=n_head,
+            resid_pdrop=0.0,
+            embd_pdrop=0.0,
+            attn_pdrop=0.0,
+            use_cache=False,
+        )
+        self.task = task
+        self.n_components = self.task.max_n_components
+        self.n_subtasks = self.task.n_subtasks
+        self.subtask_components = self.task.subtask_components
+        # Task embedding that embed components
+        self.task_embedding = nn.Embedding(
+            self.n_components,
+            n_task_embd
+        )
+        n_embd = transformer_config.n_embd
+        # TODO: maybe enrich the method of injecting task information
+        self.read_in = nn.Linear(self.task.dim + n_task_embd, n_embd)
+        self.transformer = GPT2Model(transformer_config)
+        d_out = self.n_components + self.task.dim
+        self.read_outs = nn.ModuleList()
+        for i in range(self.n_subtasks):
+            self.read_outs.append(
+                AttentivePooling(
+                    d_in=n_embd,
+                    d_out=d_out,
+                    n_out=self.n_components,  # Use the largest K
+                )
+            )
+        # Loss functions
+        self.alpha_loss = nn.CrossEntropyLoss()
+        self.mu_loss = nn.MSELoss(reduction="none")
+        self.to(default_device)
+
+    def _map_component_ids(self, component_ids: torch.Tensor):
+        # TODO: this is not the most efficient way
+        return torch.stack(
+            [
+                i * (component_ids == n_components - 1).long()
+                for i, n_components in enumerate(self.subtask_components)
+            ],
+            dim=1,
+        ).sum(dim=1)
+
+    def forward(self, inputs: IsotropicGaussianMixtureSample):
+        x = inputs.sample
+        component_ids = inputs.mask_components.sum(dim=1).long() - 1
+        task_embeds = self.task_embedding(
+            component_ids
+        ).unsqueeze(1).expand(-1, x.size(1), -1)
+        x = torch.cat([x, task_embeds], dim=-1)
+        embeds = self.read_in(x)
+        h = self.transformer(inputs_embeds=embeds).last_hidden_state
+        out_combn = torch.stack([read_out(h) for read_out in self.read_outs], dim=1)
+        results = torch.gather(
+            out_combn,
+            1,
+            self._map_component_ids(component_ids).view(-1, 1, 1, 1).expand(
+                -1,
+                -1,
+                out_combn.size(2),
+                out_combn.size(3)
+            ),
+        ).squeeze(dim=1)
+        alpha_est = results[:, :, : self.n_components].mean(dim=1)
+        mu_est = results[:, :, self.n_components :]
+        alpha_est = alpha_est - (1. - inputs.mask_components) * 1e9
+        alpha_loss_val = self.alpha_loss(alpha_est, inputs.mixture_probs)
+        mu_loss_val_ = self.mu_loss(mu_est, inputs.gaussian_means)  # [b, n, d]
+        mask = inputs.mask_components
+        mu_loss_sum_ = (mu_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
+        mu_loss_val = (mu_loss_sum_ / mask.sum(dim=1)).mean()
         return TGMMOutput(
             alpha_loss=alpha_loss_val,
             mu_loss=mu_loss_val,
