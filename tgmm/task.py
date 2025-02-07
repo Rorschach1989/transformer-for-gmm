@@ -4,7 +4,11 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 
-from .utils import default_device, _cos, _l2
+from .utils import (
+    default_device,
+    _cos,
+    sequence_length_to_mask,
+)
 
 
 class Task(object):
@@ -79,6 +83,7 @@ def concat_task_sample(sample_list: List[IsotropicGaussianMixtureSample]):
                 kwargs[k].append(v)
     for k in list(kwargs):
         if kwargs[k]:
+            # TODO: Align length masks
             kwargs[k] = torch.cat(kwargs[k], dim=0)
         else:
             kwargs[k] = None
@@ -126,6 +131,12 @@ class IsotropicGaussianMixtureTask(Task):
         scale = self.scale or self._default_scale
         return torch.ones(batch_size) * scale
 
+    def _sample_seq_mask(self, batch_size, n_sample):
+        n_max = n_sample
+        n_min = n_sample // 2  # TODO: use more flexible strategies
+        seq_lens = torch.randint(n_min, n_max + 1, (batch_size,))
+        return sequence_length_to_mask(seq_lens, max_len=n_sample)
+
     def _sample(self, n_sample, batch_size, mixture_probs, gaussian_means, scale):
         assignment = torch.multinomial(
             mixture_probs, n_sample, replacement=True
@@ -150,7 +161,7 @@ class IsotropicGaussianMixtureTask(Task):
         task_sample: IsotropicGaussianMixtureSample,
         n_sample=None,
         batch_size=None,
-    ):  # TODO: this util might not support mixed components
+    ):  # TODO: refine this util
         _batch_size, _n_sample, _ = task_sample.sample.size()
         n_sample = n_sample or _n_sample
         batch_size = batch_size or _batch_size
@@ -169,16 +180,23 @@ class IsotropicGaussianMixtureTask(Task):
         *args,
         **kwargs
     ):
+        gen_mask = kwargs.pop("gen_mask", True)
         mixture_probs = self._sample_mixture_probs(batch_size)
         gaussian_means = self._sample_mean(batch_size)
         scale = self._sample_scale(batch_size)
-        return self._sample(
+        task_sample = self._sample(
             n_sample,
             batch_size,
             mixture_probs,
             gaussian_means,
             scale,
         )
+        if gen_mask:
+            mask_length = self._sample_seq_mask(
+                batch_size, n_sample
+            ).to(default_device)
+            task_sample.mask_length = mask_length
+        return task_sample
 
 
 class MixedComponentGMMTask(Task):

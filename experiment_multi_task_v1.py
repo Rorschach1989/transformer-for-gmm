@@ -50,8 +50,9 @@ def evaluate(task, model, cfg, step):
     def _eval(subtask):
         with torch.no_grad():
             task_sample = subtask.sample(
-                n_sample=cfg.task.n_sample,
+                n_sample=cfg.task.n_sample * 2,
                 batch_size=8,
+                gen_mask=False,
             )
             task_sample_for_eval = task_sample.to("cpu")
             task_sample.pad(task.max_n_components)

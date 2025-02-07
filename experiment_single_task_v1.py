@@ -44,6 +44,7 @@ def evaluate(task, model, cfg, step):
         task_sample = task.sample(
             n_sample=cfg.task.n_sample,
             batch_size=8,
+            gen_mask=False,
         )
         gmm_em = GaussianMixtureEM(
             n_components=cfg.task.n_components,

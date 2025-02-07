@@ -30,17 +30,23 @@ class AttentivePooling(nn.Module):
     def reset_parameters(self):
         nn.init.normal_(self.q)
 
-    def forward(self, x):
+    def forward(self, x, mask: torch.Tensor = None):
         r"""Pool x using an attentive fashion
 
         Args:
             x (torch.Tensor): input tensor of shape [batch_size, n_sample, d_in]
+            mask (torch.Tensor): mask tensor of shape [batch_size, n_sample]
 
         Returns:
             torch.Tensor: output tensor of shape [batch_size, n_out, d_out]
+            mask (torch.Tensor): mask tensor of shape [batch_size, n_sample]
         """
         k, v = self.k_proj(x), self.v_proj(x)
-        weights = F.softmax(k @ self.q.T, dim=1)  # [batch_size, seq_len, n_out]
+        weights_ = k @ self.q.T
+        if mask is not None:
+            attn_mask = mask.float().unsqueeze(-1)
+            weights_ = weights_ - attn_mask * 1e9
+        weights = F.softmax(weights_, dim=1)  # [batch_size, seq_len, n_out]
         result = torch.einsum("bld,bln->bldn", v, weights).sum(dim=1)
         return torch.permute(result, (0, 2, 1))
 
@@ -181,8 +187,14 @@ class MultiTaskTGMMModel(nn.Module):
         ).unsqueeze(1).expand(-1, x.size(1), -1)
         x = torch.cat([x, task_embeds], dim=-1)
         embeds = self.read_in(x)
-        h = self.transformer(inputs_embeds=embeds).last_hidden_state
-        out_combn = torch.stack([read_out(h) for read_out in self.read_outs], dim=1)
+        h = self.transformer(
+            inputs_embeds=embeds,
+            attention_mask=inputs.mask_length,
+        ).last_hidden_state
+        out_combn = torch.stack(
+            [read_out(h, mask=inputs.mask_length) for read_out in self.read_outs],
+            dim=1
+        )
         results = torch.gather(
             out_combn,
             1,
