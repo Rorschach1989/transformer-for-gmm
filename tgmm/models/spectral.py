@@ -6,7 +6,7 @@ from ..logger import logger
 from .base import _BatchFitMixin
 
 
-tl.set_backend('pytorch')
+tl.set_backend("pytorch")
 
 
 class GaussianMixtureSpectral(_BatchFitMixin):
@@ -26,7 +26,9 @@ class GaussianMixtureSpectral(_BatchFitMixin):
     def __init__(self, n_components, normalize_weights=True, **kwargs):
         self.n_components = n_components
         self.normalize_weights = normalize_weights
-        self.tensor_factorizer = tl.decomposition.SymmetricCP(rank=self.n_components, **kwargs)
+        self.tensor_factorizer = tl.decomposition.SymmetricCP(
+            rank=self.n_components, **kwargs
+        )
 
     def fit(self, X, *args, **kwargs):
         r"""The fitting procedure
@@ -52,7 +54,7 @@ class GaussianMixtureSpectral(_BatchFitMixin):
         sigma_sqr_est = S1[0]
         v = V1[:, 0].view(-1, 1)  # [d, 1]
         coeff = (X - mu) @ v  # [n, 1]
-        M1 = (X * (coeff ** 2)).mean(dim=0)  # [d]
+        M1 = (X * (coeff**2)).mean(dim=0)  # [d]
         M2 = xox - sigma_sqr_est * torch.eye(d)
         S2, V2 = torch.linalg.eigh(M2)
         V = V2[:, -k:]  # [d, k]
@@ -65,12 +67,12 @@ class GaussianMixtureSpectral(_BatchFitMixin):
 
         M1w = W.T @ M1.view(-1, 1)
         Xw = X @ W  # [n, k]
-        T = torch.einsum('in,jn,kn->ijk', Xw.T, Xw.T, Xw.T) / N
+        T = torch.einsum("in,jn,kn->ijk", Xw.T, Xw.T, Xw.T) / N
         E = (torch.eye(d) @ W).T  # [k, d]
         M1wr = M1w.repeat(1, d)
-        T -= torch.einsum('in,jn,kn->ijk', M1wr, E, E)
-        T -= torch.einsum('in,jn,kn->ijk', E, M1wr, E)
-        T -= torch.einsum('in,jn,kn->ijk', E, E, M1wr)
+        T -= torch.einsum("in,jn,kn->ijk", M1wr, E, E)
+        T -= torch.einsum("in,jn,kn->ijk", E, M1wr, E)
+        T -= torch.einsum("in,jn,kn->ijk", E, E, M1wr)
         w, mus = self.tensor_factorizer.fit_transform(T)
 
         # Unwhiten the solutions
@@ -78,7 +80,7 @@ class GaussianMixtureSpectral(_BatchFitMixin):
         # ``Tensor Decompositions for Learning Latent Variable Models``
         # By Anandkumar, Ge, Hsu, Kakade and Telgarsky
         mu_hat = w.view(1, -1) * (B @ mus)  # [d, k]
-        w_hat = 1 / (w ** 2)
+        w_hat = 1 / (w**2)
         if self.normalize_weights:
             w_hat = F.normalize(w_hat, dim=0, p=1)
         return w_hat, mu_hat.T, torch.sqrt(sigma_sqr_est)

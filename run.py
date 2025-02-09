@@ -8,23 +8,37 @@ from tgmm.utils import (
     wandb_profile,
     HyperParamManager,
     get_device_count,
-    gen_name_from_cfg
+    gen_name_from_cfg,
 )
 from tgmm.train import train
 
 
 wandb.login(key=wandb_profile.api_key, relogin=True)
 parser = argparse.ArgumentParser()
-parser.add_argument('--prefix', type=str, help="Prefix in all the experiments")
-parser.add_argument('--mixture_dim', type=int, nargs="*", help="Dimension of mixture means")
-parser.add_argument('--n_components_max', type=int, nargs="*", help="Maximum number of components")
-parser.add_argument('--n_components_min', type=int, nargs="*", help="Minimum number of components")
-parser.add_argument('--train_batch_size', type=int, nargs="*", help="Task per step for training")
-parser.add_argument('--n_embd', type=int, nargs="*", help="Hidden size of transformer")
-parser.add_argument('--n_layer', type=int, nargs="*", help="Size of transformer")
-parser.add_argument('--train_n_sample', type=int, nargs="*", help="Maximum length during training")
-parser.add_argument('--eval_n_sample', type=int, nargs="*", help="Length during evaluation")
-parser.add_argument('--n_steps', type=int, default=10001, help="Number of training steps")
+parser.add_argument("--prefix", type=str, help="Prefix in all the experiments")
+parser.add_argument(
+    "--mixture_dim", type=int, nargs="*", help="Dimension of mixture means"
+)
+parser.add_argument(
+    "--n_components_max", type=int, nargs="*", help="Maximum number of components"
+)
+parser.add_argument(
+    "--n_components_min", type=int, nargs="*", help="Minimum number of components"
+)
+parser.add_argument(
+    "--train_batch_size", type=int, nargs="*", help="Task per step for training"
+)
+parser.add_argument("--n_embd", type=int, nargs="*", help="Hidden size of transformer")
+parser.add_argument("--n_layer", type=int, nargs="*", help="Size of transformer")
+parser.add_argument(
+    "--train_n_sample", type=int, nargs="*", help="Maximum length during training"
+)
+parser.add_argument(
+    "--eval_n_sample", type=int, nargs="*", help="Length during evaluation"
+)
+parser.add_argument(
+    "--n_steps", type=int, default=10001, help="Number of training steps"
+)
 
 
 def main(args):
@@ -54,5 +68,6 @@ def main(args):
             eval_results = future.result()
             manager.save_results(cfg, eval_results)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main(parser.parse_args())

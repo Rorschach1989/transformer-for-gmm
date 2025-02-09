@@ -144,10 +144,7 @@ class MultiTaskTGMMModel(nn.Module):
         self.n_subtasks = self.task.n_subtasks
         self.subtask_components = self.task.subtask_components
         # Task embedding that embed components
-        self.task_embedding = nn.Embedding(
-            self.n_components,
-            n_task_embd
-        )
+        self.task_embedding = nn.Embedding(self.n_components, n_task_embd)
         n_embd = transformer_config.n_embd
         # TODO: maybe enrich the method of injecting task information
         self.read_in = nn.Linear(self.task.dim + n_task_embd, n_embd)
@@ -179,9 +176,9 @@ class MultiTaskTGMMModel(nn.Module):
     def forward(self, inputs: IsotropicGaussianMixtureSample):
         x = inputs.sample
         component_ids = inputs.mask_components.sum(dim=1).long() - 1
-        task_embeds = self.task_embedding(
-            component_ids
-        ).unsqueeze(1).expand(-1, x.size(1), -1)
+        task_embeds = (
+            self.task_embedding(component_ids).unsqueeze(1).expand(-1, x.size(1), -1)
+        )
         x = torch.cat([x, task_embeds], dim=-1)
         embeds = self.read_in(x)
         h = self.transformer(
@@ -189,22 +186,18 @@ class MultiTaskTGMMModel(nn.Module):
             attention_mask=inputs.mask_length,
         ).last_hidden_state
         out_combn = torch.stack(
-            [read_out(h, mask=inputs.mask_length) for read_out in self.read_outs],
-            dim=1
+            [read_out(h, mask=inputs.mask_length) for read_out in self.read_outs], dim=1
         )
         results = torch.gather(
             out_combn,
             1,
-            self._map_component_ids(component_ids).view(-1, 1, 1, 1).expand(
-                -1,
-                -1,
-                out_combn.size(2),
-                out_combn.size(3)
-            ),
+            self._map_component_ids(component_ids)
+            .view(-1, 1, 1, 1)
+            .expand(-1, -1, out_combn.size(2), out_combn.size(3)),
         ).squeeze(dim=1)
         alpha_est = results[:, :, : self.n_components].mean(dim=1)
         mu_est = results[:, :, self.n_components :]
-        alpha_est = alpha_est - (1. - inputs.mask_components) * 1e9
+        alpha_est = alpha_est - (1.0 - inputs.mask_components) * 1e9
         alpha_loss_val = self.alpha_loss(alpha_est, inputs.mixture_probs)
         mu_loss_val_ = self.mu_loss(mu_est, inputs.gaussian_means)  # [b, n, d]
         mask = inputs.mask_components

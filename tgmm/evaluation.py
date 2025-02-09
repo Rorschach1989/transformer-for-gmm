@@ -11,25 +11,24 @@ from .task import IsotropicGaussianMixtureTask, IsotropicGaussianMixtureSample
 def _preprocess_scale(scale, batch_size, d, n_components):
     # Pre-process scale
     if scale is None:
-        scale = 1.
+        scale = 1.0
     if isinstance(scale, float):
-        covariances = torch.stack(
-            [torch.eye(d) for _ in range(batch_size)],
-            dim=0
-        ) * scale  # [b, d, d]
+        covariances = (
+            torch.stack([torch.eye(d) for _ in range(batch_size)], dim=0) * scale
+        )  # [b, d, d]
     elif scale.ndim == 1:
         covariances = torch.stack(
-            [torch.eye(d) for _ in range(batch_size)],
-            dim=0
-        ) * scale.view(-1, 1, 1)  # [b, d, d]
+            [torch.eye(d) for _ in range(batch_size)], dim=0
+        ) * scale.view(
+            -1, 1, 1
+        )  # [b, d, d]
     elif scale.ndim in {3, 4}:
         covariances = scale
     else:
         raise ValueError
     if covariances.ndim == 3:
         covariances = torch.stack(
-            [covariances for _ in range(n_components)],
-            dim=1
+            [covariances for _ in range(n_components)], dim=1
         )  # [b, k, d, d]
     return covariances
 
@@ -65,10 +64,9 @@ def _compute_gmm_ll(X, mu, alpha, scale: Union[float, torch.Tensor] = None):
     exponent = -0.5 * ((diff @ inv_covariances) * diff).sum(dim=-1)  # [b, k, n]
     log_prob_density = exponent - 0.5 * log_det.unsqueeze(-1)  # [b, k, n]
     log_responsibilities = log_prob_density + torch.log(alpha + 1e-15).unsqueeze(-1)
-    batch_ll = torch.logsumexp(
-        log_responsibilities,
-        dim=-1
-    ).sum(dim=-1) / n_sample  # [b]
+    batch_ll = (
+        torch.logsumexp(log_responsibilities, dim=-1).sum(dim=-1) / n_sample
+    )  # [b]
     return batch_ll, torch.argmax(log_responsibilities, dim=1)
 
 
@@ -112,7 +110,7 @@ class GMMEvaluator(object):
         self,
         task: IsotropicGaussianMixtureTask,
         ground_truth: IsotropicGaussianMixtureSample,
-        distance="l2"
+        distance="l2",
     ):
         self.task = task
         self.ground_truth = ground_truth
@@ -124,10 +122,9 @@ class GMMEvaluator(object):
             raise NotImplementedError
 
     def _align(self, mu_est: torch.Tensor, alpha_est: torch.Tensor):
-        cost_matrix = self.distance_fn(
-            self.ground_truth.gaussian_means,
-            mu_est
-        ).cpu().numpy()
+        cost_matrix = (
+            self.distance_fn(self.ground_truth.gaussian_means, mu_est).cpu().numpy()
+        )
         batch_size = mu_est.size(0)
         for i in range(batch_size):
             _, perm = sco.linear_sum_assignment(cost_matrix[i])
@@ -145,11 +142,11 @@ class GMMEvaluator(object):
         self._align(mu_est, alpha_est)
         # l2 error of estimated means and weights
         l2_error_means = (
-            self.ground_truth.gaussian_means - mu_est
-        ).square().mean(dim=[1, 2])
+            (self.ground_truth.gaussian_means - mu_est).square().mean(dim=[1, 2])
+        )
         l2_error_weights = (
-            self.ground_truth.mixture_probs - alpha_est
-        ).square().mean(dim=-1)
+            (self.ground_truth.mixture_probs - alpha_est).square().mean(dim=-1)
+        )
         if in_sample_eval:
             X = self.ground_truth.sample
             true_assignments = self.ground_truth.assignment
@@ -169,9 +166,7 @@ class GMMEvaluator(object):
             mu=mu_est,
             alpha=alpha_est,
         )
-        cluster_acc = (
-            cluster_assignments == true_assignments
-        ).float().mean(dim=-1)
+        cluster_acc = (cluster_assignments == true_assignments).float().mean(dim=-1)
         return GMMEvaluationResult(
             l2_error_means=l2_error_means,
             l2_error_weights=l2_error_weights,

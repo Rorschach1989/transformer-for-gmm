@@ -41,8 +41,7 @@ class IsotropicGaussianMixtureSample(object):
         if length < pad_to_length:
             diff = pad_to_length - length
             _ones = torch.ones_like(
-                self.mixture_probs,
-                device=self.mixture_probs.device
+                self.mixture_probs, device=self.mixture_probs.device
             )
             self.mixture_probs = F.pad(
                 self.mixture_probs,
@@ -64,8 +63,7 @@ class IsotropicGaussianMixtureSample(object):
             )
         else:
             self.mask_components = torch.ones_like(
-                self.mixture_probs,
-                device=self.mixture_probs.device
+                self.mixture_probs, device=self.mixture_probs.device
             )
 
 
@@ -73,9 +71,7 @@ def concat_task_sample(sample_list: List[IsotropicGaussianMixtureSample]):
     pad_to_length = max(item.mixture_probs.size(1) for item in sample_list)
     for item in sample_list:
         item.pad(pad_to_length)
-    kwargs = {
-        k: [] for k in sample_list[0].__dict__
-    }
+    kwargs = {k: [] for k in sample_list[0].__dict__}
     for item in sample_list:
         for k, v in item.__dict__.items():
             if v is not None:
@@ -102,25 +98,28 @@ class IsotropicGaussianMixtureTask(Task):
     n_components: int
     dim: int
     scale: float = None
-    _default_scale: float = 1.
+    _default_scale: float = 1.0
 
     def _sample_mean(self, batch_size):
         # TODO: too much heuristics here, can we be more rigorous?
         _batch_size = 4 * batch_size  # Expand batch size to create some buffer
-        gaussian_means = (torch.rand(_batch_size, self.dim, self.n_components) - 0.5) * 10
-        self_sim = -_cos(gaussian_means.permute(0, 2, 1), gaussian_means.permute(0, 2, 1))
+        gaussian_means = (
+            torch.rand(_batch_size, self.dim, self.n_components) - 0.5
+        ) * 10
+        self_sim = -_cos(
+            gaussian_means.permute(0, 2, 1), gaussian_means.permute(0, 2, 1)
+        )
         mask = ~torch.eye(self.n_components, dtype=torch.bool)
         mask = mask.unsqueeze(0).expand(_batch_size, -1, -1)
         off_diagonal_entries = self_sim[mask].view(_batch_size, -1)
-        indices, = torch.where(off_diagonal_entries.max(dim=-1)[0] < 0.8)
+        (indices,) = torch.where(off_diagonal_entries.max(dim=-1)[0] < 0.8)
         return gaussian_means[indices][:batch_size, :, :]
 
     def _sample_mixture_probs(self, batch_size):
         return F.normalize(
-            torch.sort(
-                torch.rand(batch_size, self.n_components) * 0.6 + 0.2,
-                dim=-1
-            )[0],
+            torch.sort(torch.rand(batch_size, self.n_components) * 0.6 + 0.2, dim=-1)[
+                0
+            ],
             p=1,
         )
 
@@ -172,13 +171,7 @@ class IsotropicGaussianMixtureTask(Task):
             scale=task_sample.scale,
         )
 
-    def sample(
-        self,
-        n_sample,
-        batch_size,
-        *args,
-        **kwargs
-    ):
+    def sample(self, n_sample, batch_size, *args, **kwargs):
         gen_mask = kwargs.pop("gen_mask", True)
         mixture_probs = self._sample_mixture_probs(batch_size)
         gaussian_means = self._sample_mean(batch_size)
@@ -191,9 +184,7 @@ class IsotropicGaussianMixtureTask(Task):
             scale,
         )
         if gen_mask:
-            mask_length = self._sample_seq_mask(
-                batch_size, n_sample
-            )
+            mask_length = self._sample_seq_mask(batch_size, n_sample)
             task_sample.mask_length = mask_length
         return task_sample
 
@@ -216,7 +207,6 @@ class MultiTaskIsotropicGaussianMixtureTask(Task):
 
     def sample(self, n_sample, batch_size, *args, **kwargs):
         sample_list = [
-            task.sample(n_sample, batch_size, *args, **kwargs)
-            for task in self.tasks
+            task.sample(n_sample, batch_size, *args, **kwargs) for task in self.tasks
         ]
         return concat_task_sample(sample_list)

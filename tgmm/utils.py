@@ -20,9 +20,7 @@ class WandbProfile(object):
 
 
 def _get_root():
-    return os.path.dirname(
-        os.path.abspath(os.path.dirname(__file__))
-    )
+    return os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
 
 
 def get_wandb_api_key():
@@ -50,7 +48,7 @@ def _cos(truth: torch.Tensor, est: torch.Tensor):
     norm_truth = truth.norm(dim=-1, p=2, keepdim=True)
     norm_est = est.norm(dim=-1, p=2, keepdim=True)
     denom = torch.bmm(norm_truth, norm_est.permute((0, 2, 1))) + 1e-15
-    return - inner_product / denom
+    return -inner_product / denom
 
 
 def _l2(truth: torch.Tensor, est: torch.Tensor):
@@ -148,10 +146,14 @@ def sequence_length_to_mask(sequence_lengths, max_len=None, dtype=torch.bool):
         max_len = torch.max(sequence_lengths)  # Find the maximum length dynamically
 
     batch_size = sequence_lengths.size(0)
-    row_indices = torch.arange(max_len, device=sequence_lengths.device).unsqueeze(0).repeat(batch_size, 1) # (batch_size, max_len)
-    col_indices = sequence_lengths.unsqueeze(1) # (batch_size, 1)
+    row_indices = (
+        torch.arange(max_len, device=sequence_lengths.device)
+        .unsqueeze(0)
+        .repeat(batch_size, 1)
+    )  # (batch_size, max_len)
+    col_indices = sequence_lengths.unsqueeze(1)  # (batch_size, 1)
 
-    mask = row_indices < col_indices # Broadcasting comparison
+    mask = row_indices < col_indices  # Broadcasting comparison
 
     return mask.to(dtype=dtype)
 
@@ -210,11 +212,11 @@ def gen_name_from_cfg(cfg):
 class HyperParamManager(object):
 
     @staticmethod
-    def _default_root(prefix='run'):
-        log_dir = os.path.join(_get_root(), 'logs')
+    def _default_root(prefix="run"):
+        log_dir = os.path.join(_get_root(), "logs")
         if not os.path.exists(log_dir):
             os.mkdir(log_dir)
-        return os.path.join(log_dir, f'{prefix}_{int(time.time())}')
+        return os.path.join(log_dir, f"{prefix}_{int(time.time())}")
 
     def __init__(self, root_dir=None, cfg_setter=setup_cfg):
         if root_dir is None:
@@ -248,21 +250,19 @@ class HyperParamManager(object):
         if file_name is None:
             file_name = f"{gen_name_from_cfg(cfg)}.results.json"
         file_path = os.path.join(self._root_dir, file_name)
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             json.dump(results, f, indent=4)
 
     def iter_configs(self):
         for cfg_values in product(*self._param_store.values()):
-            yield self.cfg_setter(
-                **dict(zip(self._param_store.keys(), cfg_values))
-            )
+            yield self.cfg_setter(**dict(zip(self._param_store.keys(), cfg_values)))
 
     def get_description_string(self, fields):
         descriptions = []
         for field in fields:
-            field_val = '-'.join(map(str, self[field]))
-            descriptions.append(f'{field}_{field_val}')
-        return '+'.join(descriptions)
+            field_val = "-".join(map(str, self[field]))
+            descriptions.append(f"{field}_{field_val}")
+        return "+".join(descriptions)
 
     def clone(self):
         new_manager = HyperParamManager(cfg_setter=self.cfg_setter)
@@ -292,7 +292,4 @@ class StreamingLossMeter(object):
         self._counter += 1
 
     def compute(self):
-        return [
-            meter.compute() if self._counter else None
-            for meter in self.meters
-        ]
+        return [meter.compute() if self._counter else None for meter in self.meters]

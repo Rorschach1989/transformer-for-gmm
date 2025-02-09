@@ -15,7 +15,7 @@ class GaussianMixtureEM(_BatchFitMixin):
         max_iter=100,
         tol=1e-7,
         learnable_covariance=False,
-        scale: float = 1.,
+        scale: float = 1.0,
         verbose: bool = False,
     ):
         self.n_components = n_components
@@ -91,9 +91,7 @@ class GaussianMixtureEM(_BatchFitMixin):
                     diff.T @ (responsibilities[:, k].view(-1, 1) * diff)
                 ) / effective_samples[k]
                 # Regularization: Add a small value to the diagonal to ensure positive definiteness
-                covariances[k] += 1e-6 * torch.eye(
-                    self.n_features, device=self.device
-                )
+                covariances[k] += 1e-6 * torch.eye(self.n_features, device=self.device)
         return means, covariances, weights
 
     def fit(self, X, *args, **kwargs):
@@ -110,20 +108,11 @@ class GaussianMixtureEM(_BatchFitMixin):
 
             # M-step
             means, covariances, weights = self._m_step(
-                X,
-                responsibilities,
-                means,
-                covariances,
-                weights
+                X, responsibilities, means, covariances, weights
             )
 
             # Calculate log-likelihood for convergence check
-            log_likelihood = self.compute_log_likelihood(
-                X,
-                means,
-                covariances,
-                weights
-            )
+            log_likelihood = self.compute_log_likelihood(X, means, covariances, weights)
             log_likelihood_history.append(log_likelihood)
 
             # Check for convergence
