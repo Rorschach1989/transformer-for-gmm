@@ -8,9 +8,8 @@ from transformers import GPT2Model, GPT2Config
 from ..task import (
     IsotropicGaussianMixtureSample,
     IsotropicGaussianMixtureTask,
-    MixedComponentGMMTask,
+    MultiTaskIsotropicGaussianMixtureTask,
 )
-from ..utils import default_device
 
 
 class AttentivePooling(nn.Module):
@@ -97,7 +96,6 @@ class TGMMModel(nn.Module):
         # Loss functions
         self.alpha_loss = nn.CrossEntropyLoss()
         self.mu_loss = nn.MSELoss()
-        self.to(default_device)
 
     def forward(self, inputs: IsotropicGaussianMixtureSample):
         x = inputs.sample
@@ -122,7 +120,7 @@ class MultiTaskTGMMModel(nn.Module):
 
     def __init__(
         self,
-        task: MixedComponentGMMTask,
+        task: MultiTaskIsotropicGaussianMixtureTask,
         n_positions=100,
         n_embd=128,
         n_layer=12,
@@ -167,7 +165,6 @@ class MultiTaskTGMMModel(nn.Module):
         # Loss functions
         self.alpha_loss = nn.CrossEntropyLoss()
         self.mu_loss = nn.MSELoss(reduction="none")
-        self.to(default_device)
 
     def _map_component_ids(self, component_ids: torch.Tensor):
         # TODO: this is not the most efficient way

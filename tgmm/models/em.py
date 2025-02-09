@@ -16,6 +16,7 @@ class GaussianMixtureEM(_BatchFitMixin):
         tol=1e-7,
         learnable_covariance=False,
         scale: float = 1.,
+        verbose: bool = False,
     ):
         self.n_components = n_components
         self.n_features = n_features
@@ -26,6 +27,7 @@ class GaussianMixtureEM(_BatchFitMixin):
         # EM approaches are typically computationally light
         self.device = torch.device("cpu")
         self.scale = scale
+        self.verbose = verbose
 
     def _initialize_params(self):
         # Initialize parameters
@@ -101,6 +103,7 @@ class GaussianMixtureEM(_BatchFitMixin):
 
         means, covariances, weights = self._initialize_params()
 
+        iteration = 0
         for iteration in range(self.max_iter):
             # E-step
             responsibilities = self._e_step(X, means, covariances, weights)
@@ -129,19 +132,14 @@ class GaussianMixtureEM(_BatchFitMixin):
                 and torch.abs(log_likelihood_history[-1] - log_likelihood_history[-2])
                 < self.tol
             ):
-                logger.info(f"Converged after {iteration} iterations.")
+                if self.verbose:
+                    logger.info(f"Converged after {iteration} iterations.")
                 break
 
             if iteration == self.max_iter - 1:
                 logger.warn(f"Reach maximum iterations: {iteration + 1}.")
 
-        return weights, means, covariances
-
-    # def predict(self, X):
-    #     """Predict the cluster assignments for new data."""
-    #     X = X.to(self.device)
-    #     responsibilities = self._e_step(X)
-    #     return torch.argmax(responsibilities, dim=1)
+        return weights, means, covariances, torch.tensor(iteration, dtype=torch.float)
 
     def compute_log_likelihood(self, X, means, covariances, weights):
         """Compute the log-likelihood of the data under the current model."""

@@ -92,6 +92,17 @@ class GMMEvaluationResult:
             out_str += f"{_out}\n"
         return out_str
 
+    def summary_for_wandb(self):
+        out_dict = {}
+        for k, v in self.__dict__.items():
+            if isinstance(v, torch.Tensor):
+                mean = v.mean().item()
+                std = v.std().item()
+                out_dict[f"{k}_mean"] = mean
+                out_dict[f"{k}_std"] = std
+            else:
+                out_dict[f"{k}"] = v
+        return out_dict
 
 
 class GMMEvaluator(object):

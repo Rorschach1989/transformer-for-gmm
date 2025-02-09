@@ -5,7 +5,6 @@ import torch
 import torch.nn.functional as F
 
 from .utils import (
-    default_device,
     _cos,
     sequence_length_to_mask,
 )
@@ -149,11 +148,11 @@ class IsotropicGaussianMixtureTask(Task):
         ) * scale.view(-1, 1, 1, 1) + gaussian_means.unsqueeze(1)
         sample = torch.einsum("bndk,bnk->bnd", _sample, assignment_one_hot)
         return IsotropicGaussianMixtureSample(
-            mixture_probs=mixture_probs.to(default_device),
-            assignment=assignment.to(default_device),
-            gaussian_means=torch.permute(gaussian_means.to(default_device), (0, 2, 1)),
-            sample=sample.to(default_device),
-            scale=scale.to(default_device),
+            mixture_probs=mixture_probs,
+            assignment=assignment,
+            gaussian_means=torch.permute(gaussian_means, (0, 2, 1)),
+            sample=sample,
+            scale=scale,
         )
 
     def resample_from(
@@ -194,12 +193,12 @@ class IsotropicGaussianMixtureTask(Task):
         if gen_mask:
             mask_length = self._sample_seq_mask(
                 batch_size, n_sample
-            ).to(default_device)
+            )
             task_sample.mask_length = mask_length
         return task_sample
 
 
-class MixedComponentGMMTask(Task):
+class MultiTaskIsotropicGaussianMixtureTask(Task):
     r"""Isotropic GMM task that contains a mixture of tasks with
     different components."""
 
