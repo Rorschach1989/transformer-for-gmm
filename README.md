@@ -1,3 +1,14 @@
+# Run with template
+
+execute the following shell scritps
+
+```shell
+git clone https://github.com/Rorschach1989/transformer-for-gmm.git
+cd transformer-for-gmm
+chmod +x ./run_template.sh  # Or edit it to be any configurations of interest
+./run_template.sh
+```
+
 # Configuration explanations
 
 ## Overview
