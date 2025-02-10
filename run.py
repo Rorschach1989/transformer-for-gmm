@@ -37,7 +37,7 @@ parser.add_argument(
     "--eval_n_sample", type=int, nargs="*", help="Length during evaluation"
 )
 parser.add_argument(
-    "--n_steps", type=int, default=10001, help="Number of training steps"
+    "--num_train_steps", type=int, default=10001, help="Number of training steps"
 )
 
 
@@ -52,7 +52,7 @@ def main(args):
     manager.register_field("n_layer", args.n_layer)
     manager.register_field("train_n_sample", args.train_n_sample)
     manager.register_field("eval_n_sample", args.eval_n_sample)
-    manager.register_field("n_steps", args.n_steps)
+    manager.register_field("num_train_steps", args.num_train_steps)
 
     with cf.ThreadPoolExecutor(max_workers=n_devices) as executor:
         futures = {}
