@@ -2,10 +2,8 @@ import argparse
 import concurrent.futures as cf
 
 import torch
-import wandb
 
 from tgmm.utils import (
-    wandb_profile,
     HyperParamManager,
     get_device_count,
     gen_name_from_cfg,
@@ -13,7 +11,6 @@ from tgmm.utils import (
 from tgmm.train import train
 
 
-wandb.login(key=wandb_profile.api_key, relogin=True)
 parser = argparse.ArgumentParser()
 parser.add_argument("--prefix", type=str, help="Prefix in all the experiments")
 parser.add_argument(
