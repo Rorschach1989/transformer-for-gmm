@@ -51,20 +51,23 @@ def main(args):
     manager.register_field("eval_n_sample", args.eval_n_sample)
     manager.register_field("num_train_steps", args.num_train_steps)
 
+    def _run(manager, cfg, device_id):
+        exp_name = gen_name_from_cfg(cfg)
+        manager.dump(cfg)
+        eval_results = train(cfg, device_id, f"{args.prefix}_{exp_name}")
+        manager.save_results(cfg, eval_results)
+        return eval_results
+
     with cf.ThreadPoolExecutor(max_workers=n_devices) as executor:
         futures = {}
         for i, cfg in enumerate(manager.iter_configs()):
-            exp_name = gen_name_from_cfg(cfg)
-            manager.dump(cfg)
             device_id = None if not torch.cuda.is_available() else i % n_devices
             futures[
-                executor.submit(train, cfg, device_id, f"{args.prefix}_{exp_name}")
+                executor.submit(_run, manager, cfg, device_id)
             ] = cfg
         for future in cf.as_completed(futures):
             cfg = futures[future]
             eval_results = future.result()
-            manager.save_results(cfg, eval_results)
-
 
 if __name__ == "__main__":
     main(parser.parse_args())
