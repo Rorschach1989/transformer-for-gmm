@@ -246,6 +246,12 @@ class HyperParamManager(object):
         file_path = os.path.join(self._root_dir, file_name)
         OmegaConf.save(cfg, file_path)
 
+    def result_exists(self, cfg, file_name=None):
+        if file_name is None:
+            file_name = f"{gen_name_from_cfg(cfg)}.results.json"
+        file_path = os.path.join(self._root_dir, file_name)
+        return os.path.exists(file_path)
+
     def save_results(self, cfg, results, file_name=None):
         if file_name is None:
             file_name = f"{gen_name_from_cfg(cfg)}.results.json"

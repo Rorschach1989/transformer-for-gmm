@@ -14,6 +14,9 @@ from tgmm.train import train
 parser = argparse.ArgumentParser()
 parser.add_argument("--prefix", type=str, help="Prefix in all the experiments")
 parser.add_argument(
+    "--recover_from", type=str, default=None, help="Recover from a local directory"
+)
+parser.add_argument(
     "--mixture_dim", type=int, nargs="*", help="Dimension of mixture means"
 )
 parser.add_argument(
@@ -39,7 +42,7 @@ parser.add_argument(
 
 
 def main(args):
-    manager = HyperParamManager()
+    manager = HyperParamManager(args.recover_from)
     n_devices = get_device_count()
     manager.register_field("mixture_dim", args.mixture_dim)
     manager.register_field("n_components_max", args.n_components_max)
@@ -61,6 +64,8 @@ def main(args):
     with cf.ThreadPoolExecutor(max_workers=n_devices) as executor:
         futures = {}
         for i, cfg in enumerate(manager.iter_configs()):
+            if manager.result_exists(cfg):
+                continue
             device_id = None if not torch.cuda.is_available() else i % n_devices
             futures[
                 executor.submit(_run, manager, cfg, device_id)
