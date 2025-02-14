@@ -1,5 +1,7 @@
+import os
 import argparse
 import concurrent.futures as cf
+import multiprocessing as mp
 
 import torch
 
@@ -9,6 +11,8 @@ from tgmm.utils import (
     gen_name_from_cfg,
 )
 from tgmm.train import train
+
+mp.set_start_method("spawn")
 
 
 parser = argparse.ArgumentParser()
@@ -55,9 +59,10 @@ def main(args):
     manager.register_field("num_train_steps", args.num_train_steps)
 
     def _run(manager, cfg, device_id):
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(device_id)
         exp_name = gen_name_from_cfg(cfg)
         manager.dump(cfg)
-        eval_results = train(cfg, device_id, f"{args.prefix}_{exp_name}")
+        eval_results = train(cfg, 0, f"{args.prefix}_{exp_name}")
         manager.save_results(cfg, eval_results)
         return eval_results
 

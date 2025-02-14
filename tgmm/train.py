@@ -116,8 +116,6 @@ def train(cfg, device_id, name):
         n_layer=cfg.model.n_layer,
         n_head=cfg.model.n_head,
     ).to(device)
-    if torch.cuda.is_available():
-        model.compile()
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.train.learning_rate)
     num_steps = cfg.train.num_train_steps
     loss_meter = StreamingLossMeter(n_metrics=3, window_size=cfg.train.eval_every).to(

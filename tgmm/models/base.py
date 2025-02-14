@@ -7,7 +7,7 @@ from joblib import Parallel, delayed
 class _BatchFitMixin(object):
     r"""For wrapping some common utilities of batch fitting"""
 
-    n_jobs = multiprocessing.cpu_count()
+    n_jobs = multiprocessing.cpu_count() // 2
 
     def fit(self, X, *args, **kwargs):
         raise NotImplementedError
