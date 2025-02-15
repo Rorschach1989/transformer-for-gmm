@@ -81,10 +81,9 @@ def _get_default_device():
 
 
 def get_device(device_id: int = None):
-    if device_id is None:
+    if (device_id is None) or (not torch.cuda.is_available()):
         return _get_default_device()
     else:
-        assert torch.cuda.is_available()
         return torch.device(f"cuda:{device_id}")
 
 
