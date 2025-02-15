@@ -3,8 +3,6 @@ import argparse
 import concurrent.futures as cf
 import multiprocessing as mp
 
-import torch
-
 from tgmm.utils import (
     HyperParamManager,
     get_device_count,
@@ -44,6 +42,19 @@ parser.add_argument(
 )
 
 
+def _run(manager, cfg, device_queue, exp_name):
+    device_id = device_queue.get()
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(device_id)
+    logger.info(f"Process {os.getpid()} starting task {exp_name} on GPU {device_id}")
+    try:
+        manager.dump(cfg)
+        eval_results = train(cfg, 0, exp_name)
+        manager.save_results(cfg, eval_results)
+        return eval_results
+    finally:
+        device_queue.put(device_id, timeout=1)
+
+
 def main(args):
     manager = HyperParamManager(args.recover_from)
     n_devices = get_device_count()
@@ -57,35 +68,24 @@ def main(args):
     manager.register_field("eval_n_sample", args.eval_n_sample)
     manager.register_field("num_train_steps", args.num_train_steps)
 
-    device_queue = mp.Queue()
-    for i in range(n_devices):
-        device_queue.put(i)
+    with mp.Manager() as mp_manager:
+        device_queue = mp_manager.Queue()
+        for i in range(n_devices):
+            device_queue.put(i)
 
-    def _run(manager, cfg, device_queue):
-        device_id = device_queue.get()
-        exp_name = gen_name_from_cfg(cfg)
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(device_id)
-        logger.info(f"Process {os.getpid()} starting task {exp_name} on GPU {device_id}")
-        try:
-            manager.dump(cfg)
-            eval_results = train(cfg, 0, f"{args.prefix}_{exp_name}")
-            manager.save_results(cfg, eval_results)
-            return eval_results
-        finally:
-            device_queue.put(device_id)
-
-    with cf.ThreadPoolExecutor(max_workers=n_devices) as executor:
-        futures = {}
-        for i, cfg in enumerate(manager.iter_configs()):
-            if manager.result_exists(cfg):
-                continue
-            # device_id = None if not torch.cuda.is_available() else i % n_devices
-            futures[
-                executor.submit(_run, manager, cfg, device_queue)
-            ] = cfg
-        for future in cf.as_completed(futures):
-            cfg = futures[future]
-            eval_results = future.result()
+        with cf.ProcessPoolExecutor(max_workers=n_devices) as executor:
+            futures = []
+            for i, cfg in enumerate(manager.iter_configs()):
+                exp_name = gen_name_from_cfg(cfg)
+                if manager.result_exists(cfg):
+                    continue
+                # device_id = None if not torch.cuda.is_available() else i % n_devices
+                futures.append(
+                    executor.submit(_run, manager, cfg, device_queue, exp_name)
+                )
+            for future in cf.as_completed(futures):
+                future.result()
+            logger.info("All tasks done")
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
