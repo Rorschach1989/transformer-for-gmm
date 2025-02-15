@@ -9,6 +9,16 @@ chmod +x ./run_template.sh  # Or edit it to be any configurations of interest
 ./run_template.sh
 ```
 
+# Push to ``wandb``
+
+execute the following scripts
+
+```shell
+python push_to_wandb.py --project_root <directory_to_psh> --exp_prefix <some_prefix>
+```
+
+in the current phase, it is recommended to set ``exp_prefix`` as ``stage1``
+
 # Configuration explanations
 
 ## Overview
