@@ -9,7 +9,7 @@ from tgmm.utils import (
     gen_name_from_cfg,
 )
 from tgmm.train import train
-from tgmm.logger import logger
+from tgmm.logger import logger, log_exception_with_traceback
 
 
 parser = argparse.ArgumentParser()
@@ -51,6 +51,9 @@ def _run(manager, cfg, device_queue, exp_name):
         eval_results = train(cfg, 0, exp_name)
         manager.save_results(cfg, eval_results)
         return eval_results
+    except Exception as e:
+        log_exception_with_traceback(logger)
+        return {}
     finally:
         device_queue.put(device_id, timeout=1)
 
