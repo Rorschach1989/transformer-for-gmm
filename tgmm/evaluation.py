@@ -1,3 +1,4 @@
+import math
 from typing import Union
 from dataclasses import dataclass
 
@@ -5,6 +6,7 @@ import torch
 import scipy.optimize as sco
 
 from .utils import _cos, _l2
+from .logger import logger, log_exception_with_traceback
 from .task import IsotropicGaussianMixtureTask, IsotropicGaussianMixtureSample
 
 
@@ -132,6 +134,24 @@ class GMMEvaluator(object):
             alpha_est[i] = alpha_est[i][perm]
 
     def __call__(
+        self,
+        mu_est: torch.Tensor,
+        alpha_est: torch.Tensor,
+        in_sample_eval: bool = False,
+        **kwargs,
+    ):
+        try:
+            return self._call(mu_est, alpha_est, in_sample_eval, **kwargs)
+        except Exception as e:
+            log_exception_with_traceback(logger)
+            return GMMEvaluationResult(
+                l2_error_means=math.nan,
+                l2_error_weights=math.nan,
+                log_likelihood=math.nan,
+                cluster_acc=math.nan,
+            )
+
+    def _call(
         self,
         mu_est: torch.Tensor,
         alpha_est: torch.Tensor,
