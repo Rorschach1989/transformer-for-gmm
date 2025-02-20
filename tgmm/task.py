@@ -29,12 +29,12 @@ class IsotropicGaussianMixtureSample(object):
     mask_length: torch.Tensor = None
     mask_components: torch.Tensor = None
 
-    def to(self, device):
-        kwargs = {}
+    def to(self, device, **kwargs):
+        sample_kwargs = {}
         for k, v in self.__dict__.items():
             if v is not None:
-                kwargs[k] = v.to(device)
-        return IsotropicGaussianMixtureSample(**kwargs)
+                sample_kwargs[k] = v.to(device, **kwargs)
+        return IsotropicGaussianMixtureSample(**sample_kwargs)
 
     def pad(self, pad_to_length):
         batch_size, length = self.mixture_probs.size()

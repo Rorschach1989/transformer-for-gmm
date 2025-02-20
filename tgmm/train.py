@@ -1,13 +1,19 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+from torch.utils.data import DataLoader
 
 from .models.tgmm import MultiTaskTGMMModel
 from .models.em import GaussianMixtureEM
 from .models.spectral import GaussianMixtureSpectral
 from .logger import logger
 from .evaluation import GMMEvaluator
-from .task import IsotropicGaussianMixtureTask, MultiTaskIsotropicGaussianMixtureTask
+from .task import (
+    IsotropicGaussianMixtureTask,
+    MultiTaskIsotropicGaussianMixtureTask,
+    concat_task_sample
+)
+from .dataset import TGMMDataset
 from .utils import seed_everything, wandb_profile, get_device, StreamingLossMeter
 
 
@@ -109,6 +115,15 @@ def train(cfg, device_id, name):
         for n in cfg.task.n_components
     ]
     task = MultiTaskIsotropicGaussianMixtureTask(task_list)
+    dataset = TGMMDataset(task=task, n_sample=cfg.train.n_sample)
+    loader = DataLoader(
+        dataset=dataset,
+        batch_size=cfg.train.batch_size,
+        num_workers=4,
+        pin_memory=True,
+        collate_fn=concat_task_sample,
+    )
+    it = iter(loader)
     model = MultiTaskTGMMModel(
         task=task,
         n_positions=cfg.model.n_positions,
@@ -127,10 +142,11 @@ def train(cfg, device_id, name):
     for step in pbar:
         if not step % cfg.train.eval_every:
             eval_results.append(evaluate(task, model, device, loss_meter, cfg, step))
-        task_sample = task.sample(
-            n_sample=cfg.train.n_sample,
-            batch_size=cfg.train.batch_size,
-        ).to(device)
+        # task_sample = task.sample(
+        #     n_sample=cfg.train.n_sample,
+        #     batch_size=cfg.train.batch_size,
+        # ).to(device)
+        task_sample = next(it).to(device=device, non_blocking=True)
         optimizer.zero_grad()
         model_output = model(task_sample)
         total_loss = model_output.alpha_loss + model_output.mu_loss

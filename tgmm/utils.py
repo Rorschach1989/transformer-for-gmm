@@ -286,9 +286,9 @@ class StreamingLossMeter(object):
             self.meters.append(RunningMean(window=window_size))
         self._counter = 0
 
-    def to(self, device):
+    def to(self, device, **kwargs):
         for meter in self.meters:
-            meter.to(device=device)
+            meter.to(device=device, **kwargs)
         return self
 
     def update(self, *losses):
