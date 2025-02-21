@@ -100,20 +100,39 @@ class IsotropicGaussianMixtureTask(Task):
     scale: float = None
     _default_scale: float = 1.0
 
+    # Misc params reserved for rejection sampling
+    _amplification_factor : float = 4.
+    _n_retries = 10
+
     def _sample_mean(self, batch_size):
         # TODO: too much heuristics here, can we be more rigorous?
-        _batch_size = 4 * batch_size  # Expand batch size to create some buffer
-        gaussian_means = (
-            torch.rand(_batch_size, self.dim, self.n_components) - 0.5
-        ) * 10
-        self_sim = -_cos(
-            gaussian_means.permute(0, 2, 1), gaussian_means.permute(0, 2, 1)
-        )
-        mask = ~torch.eye(self.n_components, dtype=torch.bool)
-        mask = mask.unsqueeze(0).expand(_batch_size, -1, -1)
-        off_diagonal_entries = self_sim[mask].view(_batch_size, -1)
-        (indices,) = torch.where(off_diagonal_entries.max(dim=-1)[0] < 0.8)
-        return gaussian_means[indices][:batch_size, :, :]
+
+        def _gen(b):
+            # Expand batch size to create some buffer
+            _batch_size = int(self._amplification_factor * b)
+            gaussian_means = (
+                torch.rand(_batch_size, self.dim, self.n_components) - 0.5
+            ) * 10
+            self_sim = -_cos(
+                gaussian_means.permute(0, 2, 1), gaussian_means.permute(0, 2, 1)
+            )
+            mask = ~torch.eye(self.n_components, dtype=torch.bool)
+            mask = mask.unsqueeze(0).expand(_batch_size, -1, -1)
+            off_diagonal_entries = self_sim[mask].view(_batch_size, -1)
+            (indices,) = torch.where(off_diagonal_entries.max(dim=-1)[0] < 0.8)
+            return gaussian_means[indices][:b, :, :]
+
+        means = _gen(b=batch_size)
+        if means.size(0) < batch_size:
+            n_retries = 0
+            while n_retries < self._n_retries:
+                _patch = _gen(b=batch_size - means.size(0))
+                means = torch.cat((means, _patch), dim=0)
+                if means.size(0) == batch_size:
+                    break
+                n_retries += 1
+        # If maximum number of retries exceeded, return as-is with some post-fix
+        return means
 
     def _sample_mixture_probs(self, batch_size):
         return F.normalize(
@@ -176,6 +195,11 @@ class IsotropicGaussianMixtureTask(Task):
         mixture_probs = self._sample_mixture_probs(batch_size)
         gaussian_means = self._sample_mean(batch_size)
         scale = self._sample_scale(batch_size)
+        # Check if batch_size shall be reduced
+        if gaussian_means.size(0) < batch_size:
+            batch_size = gaussian_means.size(0)
+            mixture_probs = mixture_probs[:batch_size, ...]
+            scale = scale[:batch_size, ...]
         task_sample = self._sample(
             n_sample,
             batch_size,

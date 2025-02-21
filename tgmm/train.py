@@ -13,7 +13,7 @@ from .task import (
     MultiTaskIsotropicGaussianMixtureTask,
     concat_task_sample
 )
-from .dataset import TGMMDataset
+from .dataset import GaussianMixtureDataset
 from .utils import seed_everything, wandb_profile, get_device, StreamingLossMeter
 
 
@@ -115,10 +115,14 @@ def train(cfg, device_id, name):
         for n in cfg.task.n_components
     ]
     task = MultiTaskIsotropicGaussianMixtureTask(task_list)
-    dataset = TGMMDataset(task=task, n_sample=cfg.train.n_sample)
+    dataset = GaussianMixtureDataset(
+        batch_size=cfg.train.batch_size,
+        task=task,
+        n_sample=cfg.train.n_sample
+    )
     loader = DataLoader(
         dataset=dataset,
-        batch_size=cfg.train.batch_size,
+        batch_size=1,  # Batch size is handled inside dataset iterator
         num_workers=4,
         pin_memory=True,
         collate_fn=concat_task_sample,

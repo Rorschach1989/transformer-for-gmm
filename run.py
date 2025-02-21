@@ -13,6 +13,7 @@ from tgmm.logger import logger, log_exception_with_traceback
 
 
 parser = argparse.ArgumentParser()
+parser.add_argument("--n_jobs_per_device", default=1, type=int, help="Number of jobs per device")
 parser.add_argument("--prefix", type=str, help="Prefix in all the experiments")
 parser.add_argument(
     "--recover_from", type=str, default=None, help="Recover from a local directory"
@@ -74,9 +75,11 @@ def main(args):
     with mp.Manager() as mp_manager:
         device_queue = mp_manager.Queue()
         for i in range(n_devices):
-            device_queue.put(i)
+            for _ in range(args.n_jobs_per_device):
+                device_queue.put(i)
 
-        with cf.ProcessPoolExecutor(max_workers=n_devices) as executor:
+        max_workers = args.n_jobs_per_device * n_devices
+        with cf.ProcessPoolExecutor(max_workers=max_workers) as executor:
             futures = []
             for i, cfg in enumerate(manager.iter_configs()):
                 exp_name = gen_name_from_cfg(cfg)
