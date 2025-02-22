@@ -14,9 +14,9 @@ from torchmetrics.aggregation import RunningMean
 
 @dataclass
 class WandbProfile(object):
-    api_key: str
-    entity: str
-    project: str
+    api_key: str = None
+    entity: str = None
+    project: str = None
 
 
 def _get_root():
@@ -26,9 +26,12 @@ def _get_root():
 def get_wandb_api_key():
     root = _get_root()
     data_path = os.path.join(root, "data", "wandb.json")
-    with open(data_path) as f:
-        profile_dict = json.load(f)
-        return WandbProfile(**profile_dict)
+    if os.path.exists(data_path):
+        with open(data_path) as f:
+            profile_dict = json.load(f)
+            return WandbProfile(**profile_dict)
+    else:
+        return WandbProfile()
 
 
 wandb_profile = get_wandb_api_key()
