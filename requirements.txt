@@ -1,0 +1,11 @@
+torch>=2.5.1
+joblib>=1.4.2
+transformers>=4.46.1
+tensorly>=0.9.0
+tqdm>=4.67.1
+numpy==1.26.4
+omegaconf>=2.3.0
+torchmetrics>=1.6.1
+wandb>=0.19.4
+scipy>=1.14.1
+PyYAML>=6.0.2
