@@ -1,10 +1,21 @@
-# Run with template
+# Get started
 
+## Run with some specified configuration
+
+```shell
+git clone https://github.com/Rorschach1989/transformer-for-gmm.git
+cd transformer-for-gmm
+pip install -r requirements.txt
+python run_one_config.py --config <your-config-here.yaml>
+```
+
+## Run with a large grid
 execute the following shell scritps
 
 ```shell
 git clone https://github.com/Rorschach1989/transformer-for-gmm.git
 cd transformer-for-gmm
+pip install -r requirements.txt
 chmod +x ./run_template.sh  # Or edit it to be any configurations of interest
 ./run_template.sh
 ```
