@@ -37,6 +37,8 @@ class IsotropicGaussianMixtureSample(object):
         return IsotropicGaussianMixtureSample(**sample_kwargs)
 
     def pad(self, pad_to_length):
+        if self.mask_components is not None:
+            return  # Avoid re-padding
         batch_size, length = self.mixture_probs.size()
         if length < pad_to_length:
             diff = pad_to_length - length

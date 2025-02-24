@@ -125,7 +125,7 @@ class GaussianMixtureEM(_BatchFitMixin):
                     logger.info(f"Converged after {iteration} iterations.")
                 break
 
-            if iteration == self.max_iter - 1:
+            if iteration == self.max_iter - 1 and self.verbose:
                 logger.warn(f"Reach maximum iterations: {iteration + 1}.")
 
         return weights, means, covariances, torch.tensor(iteration, dtype=torch.float)

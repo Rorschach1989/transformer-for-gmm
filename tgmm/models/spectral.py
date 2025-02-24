@@ -23,12 +23,19 @@ class GaussianMixtureSpectral(_BatchFitMixin):
     https://github.com/avikdelta/Tensor_decomposition/tree/master/GMM
     """
 
-    def __init__(self, n_components, normalize_weights=True, **kwargs):
+    def __init__(
+        self,
+        n_components,
+        normalize_weights=True,
+        verbose=False,
+        **kwargs
+    ):
         self.n_components = n_components
         self.normalize_weights = normalize_weights
         self.tensor_factorizer = tl.decomposition.SymmetricCP(
             rank=self.n_components, **kwargs
         )
+        self.verbose = verbose
 
     def fit(self, X, *args, **kwargs):
         r"""The fitting procedure
@@ -42,7 +49,7 @@ class GaussianMixtureSpectral(_BatchFitMixin):
         """
         k = self.n_components
         N, d = X.size()
-        if d < self.n_components:
+        if d < self.n_components and self.verbose:
             logger.warn(
                 "The dimension of X is smaller than the number of components, "
                 "Which may cause solutions to be unreliable"

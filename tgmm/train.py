@@ -42,9 +42,11 @@ def evaluate(
             gmm_em = GaussianMixtureEM(
                 n_components=subtask.n_components,
                 n_features=cfg.task.dim,
+                verbose=cfg.train.verbose,
             )
             gmm_spectral = GaussianMixtureSpectral(
                 n_components=subtask.n_components,
+                verbose=cfg.train.verbose,
                 # n_repeat=100,
                 # n_iteration=20,
             )
