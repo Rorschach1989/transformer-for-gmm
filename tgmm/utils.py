@@ -190,9 +190,11 @@ def setup_cfg(**kwargs):
     cfg.train.eval_every = kwargs.get("eval_every", 1000)
     # TODO: maybe set some advanced training schedules
     cfg.train.learning_rate = kwargs.get("learning_rate", 1e-3)
+    cfg.train.weight_decay = kwargs.get("weight_decay", 0.)
     cfg.train.num_train_steps = kwargs.get("num_train_steps", 10001)
     cfg.eval = {}
-    cfg.eval.n_sample = kwargs.get("eval_n_sample", 128)
+    eval_n_sample = kwargs.get("eval_n_sample", "128").split(",")
+    cfg.eval.n_sample = [int(n) for n in eval_n_sample]
     cfg.eval.batch_size = kwargs.get("eval_batch_size", 128)
     return cfg
 

@@ -29,11 +29,14 @@ def evaluate(
     model.eval()
     summary_dict = {}
 
-    def _eval(subtask: IsotropicGaussianMixtureTask):
-        prefix = f"K_{subtask.n_components}"
+    def _eval(
+        subtask: IsotropicGaussianMixtureTask,
+        eval_n_sample,
+    ):
+        prefix = f"K_{subtask.n_components}-N_{eval_n_sample}"
         with torch.no_grad():
             task_sample = subtask.sample(
-                n_sample=cfg.eval.n_sample,
+                n_sample=eval_n_sample,
                 batch_size=cfg.eval.batch_size,
                 gen_mask=False,
             ).to(device)
@@ -98,7 +101,8 @@ def evaluate(
         return summary
 
     for subtask in task.tasks:
-        summary_dict.update(_eval(subtask))
+        for n in cfg.eval.n_sample:
+            summary_dict.update(_eval(subtask, n))
     model.train()
     return summary_dict
 
@@ -137,7 +141,11 @@ def train(cfg, device_id, name):
         n_layer=cfg.model.n_layer,
         n_head=cfg.model.n_head,
     ).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.train.learning_rate)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=cfg.train.learning_rate,
+        weight_decay=cfg.train.weight_decay,
+    )
     num_steps = cfg.train.num_train_steps
     loss_meter = StreamingLossMeter(n_metrics=3, window_size=cfg.train.eval_every).to(
         device=device

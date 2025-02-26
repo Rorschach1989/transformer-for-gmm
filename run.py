@@ -36,10 +36,16 @@ parser.add_argument(
     "--train_n_sample", type=int, nargs="*", help="Maximum length during training"
 )
 parser.add_argument(
-    "--eval_n_sample", type=int, nargs="*", help="Length during evaluation"
+    "--eval_n_sample", type=str, nargs="*", help="Length during evaluation, seperated by comma"
 )
 parser.add_argument(
     "--num_train_steps", type=int, default=10001, help="Number of training steps"
+)
+parser.add_argument(
+    "--learning_rate", type=float, default=1e-3, help="Number of training steps"
+)
+parser.add_argument(
+    "--weight_decay", type=float, default=0., help="Number of training steps"
 )
 
 
@@ -71,6 +77,8 @@ def main(args):
     manager.register_field("train_n_sample", args.train_n_sample)
     manager.register_field("eval_n_sample", args.eval_n_sample)
     manager.register_field("num_train_steps", args.num_train_steps)
+    manager.register_field("learning_rate", args.learning_rate)
+    manager.register_field("weight_decay", args.weight_decay)
 
     with mp.Manager() as mp_manager:
         device_queue = mp_manager.Queue()

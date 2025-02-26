@@ -8,6 +8,6 @@ nohup python run.py \
   --n_embd 128 256 512 1024 \
   --n_layer 12 24 36 \
   --train_n_sample 32 64 128 \
-  --eval_n_sample 32 64 128 \
+  --eval_n_sample 32,64,128 \
   --num_train_steps 100001 \
  > run.log 2>&1 &
