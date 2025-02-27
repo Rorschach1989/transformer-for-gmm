@@ -100,8 +100,11 @@ def evaluate(
             }
         return summary
 
+    # For legacy compatibility
+    n_samples = [cfg.eval.n_sample] \
+        if isinstance(cfg.eval.n_sample, int) else cfg.eval.n_sample
     for subtask in task.tasks:
-        for n in cfg.eval.n_sample:
+        for n in n_samples:
             summary_dict.update(_eval(subtask, n))
     model.train()
     return summary_dict

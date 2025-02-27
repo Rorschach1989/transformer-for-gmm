@@ -82,6 +82,7 @@ train:
   batch_size: 32
   eval_every: 1000
   learning_rate: 0.001
+  weight_decay: 0.0001
   num_train_steps: 10001
 ```
 
@@ -90,7 +91,8 @@ train:
 *   **`n_sample: 64`**: This refers to the number of in-context samples drawn from the GMM. During training, ``n_sample`` is only an upper bound of $N$. Currently, the sampling logic is uniform between $[N/2, N]$
 *   **`batch_size: 32`**: This is the number of tasks during each training step.
 *   **`eval_every: 1000`**: This specifies how often the model is evaluated on evaluation tasks.
-*   **`learning_rate: 0.001`**: Learning rate for Adam/AdamW, currently no weight decay used.
+*   **`learning_rate: 0.001`**: Learning rate for Adam/AdamW.
+*   **`weight_decay: 0.0001`**: Weight decay rate for Adam/AdamW.
 *   **`num_train_steps: 10001`**: This is the total number of training steps the model will undergo. The training process will run for 10001 iterations.
 
 ## 4. `eval` Section
@@ -99,9 +101,12 @@ This section sets up the evaluation parameters.
 
 ```yaml
 eval:
-  n_sample: 128
+  n_sample:
+  - 32
+  - 64
+  - 128
   batch_size: 128
 ```
 
-*   **`n_sample: 128`**: This refers to the number of in-context samples drawn from the GMM. During evaluation, ``n_sample`` is fixed.
+*   **`n_sample: [32, 64, 128]`**: This refers to the number of in-context samples drawn from the GMM. To evaluate the capability of length generalization, several eval number of samples are specified.
 *   **`batch_size: 128`**: This is the number of tasks during each evaluation step, shall be large enough for stabilization of results. 

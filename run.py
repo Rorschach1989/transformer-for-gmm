@@ -63,6 +63,7 @@ def _run(manager, cfg, device_queue, exp_name):
         return {}
     finally:
         device_queue.put(device_id, timeout=1)
+        logger.info(f"Process {os.getpid()} has finished task {exp_name} on GPU {device_id}")
 
 
 def main(args):
