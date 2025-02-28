@@ -80,7 +80,7 @@ class GaussianMixtureEM(_BatchFitMixin):
         for k in range(self.n_components):
             means[k] = (
                 torch.sum(responsibilities[:, k].view(-1, 1) * X, dim=0)
-                / effective_samples[k]
+                / (effective_samples[k] + 1e-15)
             )
 
         if self.learnable_covariance:
