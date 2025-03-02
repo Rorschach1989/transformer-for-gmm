@@ -5,6 +5,7 @@ import random
 from collections import OrderedDict
 from dataclasses import dataclass
 from itertools import product
+from typing import Union, Callable
 
 import torch
 import numpy as np
@@ -345,6 +346,12 @@ def _append_values_recursively(target_dict, source_dict):
             target_dict.append(source_dict)
 
 
+def _tail_mean(t=1000):
+    def f(seq):
+        return np.mean(seq[-t:])
+    return f
+
+
 @dataclass
 class ResultSummarizer(object):
     r"""For handling result summarization within a root directory"""
@@ -360,25 +367,31 @@ class ResultSummarizer(object):
     MEAN = "mean"
 
     _AGG_CONF = {
-        L2_ERR_MU: MIN,
-        L2_ERR_ALPHA: MIN,
-        LL: MAX,
-        CLUSTER_ACC: MAX,
-        EM_ITER: MEAN,
+        L2_ERR_MU: _tail_mean(),
+        L2_ERR_ALPHA: _tail_mean(),
+        LL: _tail_mean(),
+        CLUSTER_ACC: _tail_mean(),
+        EM_ITER: _tail_mean(),
     }
 
     @staticmethod
-    def _agg_seq(seq: list, mode):
+    def _agg_seq(
+        seq: list,
+        mode: Union[str, Callable],
+    ):
         seq = np.asarray(seq)
         seq = seq[~np.isnan(seq)]
-        if mode is ResultSummarizer.MIN:
-            return float(np.min(seq))
-        elif mode is ResultSummarizer.MAX:
-            return float(np.max(seq))
-        elif mode is ResultSummarizer.MEAN:
-            return float(np.mean(seq))
+        if isinstance(mode, str):
+            if mode is ResultSummarizer.MIN:
+                return f"{np.min(seq):.4f}"
+            elif mode is ResultSummarizer.MAX:
+                return f"{np.max(seq):.4f}"
+            elif mode is ResultSummarizer.MEAN:
+                return f"{np.mean(seq):.4f}"
+            else:
+                raise NotImplementedError
         else:
-            raise NotImplementedError
+            return f"{mode(seq):.4f}"
 
     @staticmethod
     def _infer_mode(key):
