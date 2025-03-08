@@ -55,6 +55,9 @@ parser.add_argument(
 parser.add_argument(
     "--weight_decay", type=float, default=0., help="Number of training steps"
 )
+parser.add_argument(
+    "--eval_every", type=int, default=1000, help="Evaluate every n steps"
+)
 # Arguments related to phase transition type experiments
 parser.add_argument("--a_min", type=float, default=1.1, help="Minimum a")
 parser.add_argument("--a_max", type=float, default=11, help="Maximum a")
@@ -92,6 +95,7 @@ def _config_phase_transition(args):
     manager.register_field("a_s", [a_s])
     manager.register_field("b", b_s)
     manager.register_field("train_batch_size", args.train_batch_size)
+    manager.register_field("eval_every", args.eval_every)
     manager.register_field("n_embd", args.n_embd)
     manager.register_field("n_layer", args.n_layer)
     manager.register_field("train_n_sample", args.train_n_sample)
@@ -108,6 +112,7 @@ def _config_standard(args):
     manager.register_field("n_components_max", args.n_components_max)
     manager.register_field("n_components_min", args.n_components_min)
     manager.register_field("train_batch_size", args.train_batch_size)
+    manager.register_field("eval_every", args.eval_every)
     manager.register_field("n_embd", args.n_embd)
     manager.register_field("n_layer", args.n_layer)
     manager.register_field("train_n_sample", args.train_n_sample)

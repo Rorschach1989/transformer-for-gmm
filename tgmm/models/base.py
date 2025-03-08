@@ -21,7 +21,7 @@ class _BatchFitMixin(object):
         # result_pack = []
         # for i in range(batch_size):
         #     result_pack.append(self.fit(batch_X[i], *args, **kwargs))
-        with parallel_config("multiprocessing"):
+        with parallel_config("loky"):
             result_pack = Parallel(n_jobs=self.n_jobs)(
                 delayed(self.fit)(batch_X[i], *args, **kwargs) for i in range(batch_size)
             )

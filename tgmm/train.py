@@ -99,52 +99,21 @@ def evaluate(
             ).to(device)
             task_sample_for_eval = task_sample.to("cpu")
             task_sample.pad(task.max_n_components)
-            gmm_em = GaussianMixtureEM(
-                n_components=subtask.n_components,
-                n_features=subtask.dim,
-                verbose=cfg.train.verbose,
-            )
-            gmm_spectral = GaussianMixtureSpectral(
-                n_components=subtask.n_components,
-                verbose=cfg.train.verbose,
-                # n_repeat=100,
-                # n_iteration=20,
-            )
             evaluator = GMMEvaluator(task=subtask, ground_truth=task_sample_for_eval)
             model_output = model(task_sample)
             # Adjust mask manually
             model_output.alpha_est = model_output.alpha_est[:, : subtask.n_components]
             model_output.mu_est = model_output.mu_est[:, : subtask.n_components, :]
-            alpha_est_em, mu_est_em, _, iter_em = gmm_em.fit_batch(
-                task_sample.sample.cpu()
-            )
-            alpha_est_spectral, mu_est_spectral, _ = gmm_spectral.fit_batch(
-                task_sample.sample.cpu()
-            )
-            eval_results_em = evaluator(
-                mu_est=mu_est_em,
-                alpha_est=alpha_est_em,
-                in_sample_eval=True,
-            )
-            eval_results_spectral = evaluator(
-                mu_est=mu_est_spectral,
-                alpha_est=alpha_est_spectral,
-                in_sample_eval=True,
-            )
             eval_results_tgmm = evaluator(
                 mu_est=model_output.mu_est.cpu(),
                 alpha_est=F.softmax(model_output.alpha_est.cpu(), dim=-1),
                 in_sample_eval=True,
             )
-            mean_iter_em = iter_em.mean().item()
             alpha_loss, mu_loss, total_loss = loss_meter.compute()
             summary = {
                 "step": step,
-                f"{prefix}.em_summary": eval_results_em.summary_for_wandb(),
-                f"{prefix}.spectral_summary": eval_results_spectral.summary_for_wandb(),
                 f"{prefix}.tgmm_summary": eval_results_tgmm.summary_for_wandb(),
                 # Some auxiliary metrics
-                f"{prefix}.em_iter": mean_iter_em,
                 f"{prefix}.alpha_loss": (
                     alpha_loss.cpu().item() if alpha_loss is not None else None
                 ),
@@ -155,6 +124,43 @@ def evaluate(
                     total_loss.cpu().item() if total_loss is not None else None
                 ),
             }
+            if cfg.task.type != "PhaseTransitionGaussianMixture":
+                gmm_em = GaussianMixtureEM(
+                    n_components=subtask.n_components,
+                    n_features=subtask.dim,
+                    verbose=cfg.train.verbose,
+                )
+                gmm_spectral = GaussianMixtureSpectral(
+                    n_components=subtask.n_components,
+                    verbose=cfg.train.verbose,
+                    # n_repeat=100,
+                    # n_iteration=20,
+                )
+                alpha_est_em, mu_est_em, _, iter_em = gmm_em.fit_batch(
+                    task_sample.sample.cpu()
+                )
+                alpha_est_spectral, mu_est_spectral, _ = gmm_spectral.fit_batch(
+                    task_sample.sample.cpu()
+                )
+                eval_results_em = evaluator(
+                    mu_est=mu_est_em,
+                    alpha_est=alpha_est_em,
+                    in_sample_eval=True,
+                )
+                eval_results_spectral = evaluator(
+                    mu_est=mu_est_spectral,
+                    alpha_est=alpha_est_spectral,
+                    in_sample_eval=True,
+                )
+                mean_iter_em = iter_em.mean().item()
+                baseline_summary = {
+                    "step": step,
+                    f"{prefix}.em_summary": eval_results_em.summary_for_wandb(),
+                    f"{prefix}.spectral_summary": eval_results_spectral.summary_for_wandb(),
+                    # Some auxiliary metrics
+                    f"{prefix}.em_iter": mean_iter_em,
+                }
+                summary.update(baseline_summary)
         return summary
 
     # For legacy compatibility
