@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
-from prompt_toolkit.utils import SPHINX_AUTODOC_RUNNING
 
 from .utils import (
     _cos,
