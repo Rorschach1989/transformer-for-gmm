@@ -176,6 +176,13 @@ def setup_cfg(**kwargs):
             n_components_max = n_components_min
         cfg.task.n_components = list(range(n_components_min, n_components_max + 1))
         cfg.task.dim = kwargs.get("mixture_dim", 8)
+    elif cfg.task.type == "PhaseTransitionGaussianMixture":
+        cfg.task.n_components = 2
+        cfg.task.a_s = kwargs.get(
+            "a_s",
+            np.linspace(1.1, 11, 20).tolist()
+        )
+        cfg.task.b = kwargs.get("b", 1.)
     else:
         raise NotImplementedError
     cfg.model = {}
@@ -201,16 +208,34 @@ def setup_cfg(**kwargs):
 
 
 def gen_name_from_cfg(cfg):
-    out_fields = [
-        cfg.task.type,
-        cfg.task.n_components,
-        cfg.task.dim,
-        cfg.model.n_embd,
-        cfg.model.n_layer,
-        cfg.train.batch_size,
-        cfg.train.n_sample,
-        cfg.eval.n_sample,
-    ]
+    if cfg.task.type in {
+        "MultiTaskIsotropicGaussianMixture",
+        "IsotropicGaussianMixture"
+    }:
+        out_fields = [
+            cfg.task.type,
+            cfg.task.n_components,
+            cfg.task.dim,
+            cfg.model.n_embd,
+            cfg.model.n_layer,
+            cfg.train.batch_size,
+            cfg.train.n_sample,
+            cfg.eval.n_sample,
+        ]
+    else:
+        a_conf = [min(cfg.task.a_s), max(cfg.task.a_s), len(cfg.task.a_s)]
+        b_conf = f"{cfg.task.b:.4f}"
+        out_fields = [
+            cfg.task.type,
+            cfg.task.n_components,
+            a_conf,
+            b_conf,
+            cfg.model.n_embd,
+            cfg.model.n_layer,
+            cfg.train.batch_size,
+            cfg.train.n_sample,
+            cfg.eval.n_sample,
+        ]
     return "-".join(map(str, out_fields))
 
 
@@ -346,7 +371,7 @@ def _append_values_recursively(target_dict, source_dict):
             target_dict.append(source_dict)
 
 
-def _tail_mean(t=1000):
+def _tail_mean(t=10000):
     def f(seq):
         return np.mean(seq[-t:])
     return f

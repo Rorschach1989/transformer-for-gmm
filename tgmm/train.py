@@ -1,15 +1,18 @@
+from typing import Union
+
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
-from .models.tgmm import MultiTaskTGMMModel
+from .models.tgmm import TGMMModel, MultiTaskTGMMModel
 from .models.em import GaussianMixtureEM
 from .models.spectral import GaussianMixtureSpectral
 from .logger import logger
 from .evaluation import GMMEvaluator
 from .task import (
     IsotropicGaussianMixtureTask,
+    SphericalGaussianMixtureTask,
     MultiTaskIsotropicGaussianMixtureTask,
     concat_task_sample
 )
@@ -17,9 +20,57 @@ from .dataset import GaussianMixtureDataset
 from .utils import seed_everything, wandb_profile, get_device, StreamingLossMeter
 
 
+def _init_task_and_model(cfg):
+    if cfg.task.type == "IsotropicGaussianMixture":
+        task = IsotropicGaussianMixtureTask(
+            n_components=cfg.task.n_components,
+            dim=cfg.task.dim,
+        )
+        model = TGMMModel(
+            task=task,
+            n_positions=cfg.model.n_positions,
+            n_embd=cfg.model.n_embd,
+            n_layer=cfg.model.n_layer,
+            n_head=cfg.model.n_head,
+        )
+    elif cfg.task.type == "MultiTaskIsotropicGaussianMixture":
+        task_list = [
+            IsotropicGaussianMixtureTask(
+                n_components=n,
+                dim=cfg.task.dim,
+            )
+            for n in cfg.task.n_components
+        ]
+        task = MultiTaskIsotropicGaussianMixtureTask(task_list)
+        model = MultiTaskTGMMModel(
+            task=task,
+            n_positions=cfg.model.n_positions,
+            n_embd=cfg.model.n_embd,
+            n_layer=cfg.model.n_layer,
+            n_head=cfg.model.n_head,
+        )
+    elif cfg.task.type == "PhaseTransitionGaussianMixture":
+        # Use a-b-n configuration from https://arxiv.org/abs/1812.08078
+        task = MultiTaskIsotropicGaussianMixtureTask.abn_config(
+            a_s=cfg.task.a_s,
+            b=cfg.task.b,
+            n=cfg.train.n_sample,
+        )
+        model = TGMMModel(
+            task=task.tasks[0],  # Doesn't matter which specific task is
+            n_positions=cfg.model.n_positions,
+            n_embd=cfg.model.n_embd,
+            n_layer=cfg.model.n_layer,
+            n_head=cfg.model.n_head,
+        )
+    else:
+        raise ValueError(cfg.task.type)
+    return task, model
+
+
 def evaluate(
     task: MultiTaskIsotropicGaussianMixtureTask,
-    model: MultiTaskTGMMModel,
+    model: Union[TGMMModel, MultiTaskTGMMModel],
     device,
     loss_meter: StreamingLossMeter,
     cfg,
@@ -30,10 +81,16 @@ def evaluate(
     summary_dict = {}
 
     def _eval(
-        subtask: IsotropicGaussianMixtureTask,
+        subtask: Union[
+            IsotropicGaussianMixtureTask,
+            SphericalGaussianMixtureTask
+        ],
         eval_n_sample,
     ):
-        prefix = f"K_{subtask.n_components}-N_{eval_n_sample}"
+        if cfg.task.type == "PhaseTransitionGaussianMixture":
+            prefix = f"a_{subtask.a:.4f}-b_{subtask.b:.4f}"
+        else:
+            prefix = f"K_{subtask.n_components}-N_{eval_n_sample}"
         with torch.no_grad():
             task_sample = subtask.sample(
                 n_sample=eval_n_sample,
@@ -44,7 +101,7 @@ def evaluate(
             task_sample.pad(task.max_n_components)
             gmm_em = GaussianMixtureEM(
                 n_components=subtask.n_components,
-                n_features=cfg.task.dim,
+                n_features=subtask.dim,
                 verbose=cfg.train.verbose,
             )
             gmm_spectral = GaussianMixtureSpectral(
@@ -110,20 +167,22 @@ def evaluate(
     return summary_dict
 
 
-def train(cfg, device_id, name):
+def train(cfg, device_id, name: str = None):
     r"""Training pipeline"""
 
     device = get_device(device_id)
     seed_everything(cfg.train.seed)
     # Initialize task
-    task_list = [
-        IsotropicGaussianMixtureTask(
-            n_components=n,
-            dim=cfg.task.dim,
-        )
-        for n in cfg.task.n_components
-    ]
-    task = MultiTaskIsotropicGaussianMixtureTask(task_list)
+    # task_list = [
+    #     IsotropicGaussianMixtureTask(
+    #         n_components=n,
+    #         dim=cfg.task.dim,
+    #     )
+    #     for n in cfg.task.n_components
+    # ]
+    # task = MultiTaskIsotropicGaussianMixtureTask(task_list)
+    task, model = _init_task_and_model(cfg)
+    model = model.to(device)
     dataset = GaussianMixtureDataset(
         batch_size=cfg.train.batch_size,
         task=task,
@@ -137,13 +196,13 @@ def train(cfg, device_id, name):
         collate_fn=concat_task_sample,
     )
     it = iter(loader)
-    model = MultiTaskTGMMModel(
-        task=task,
-        n_positions=cfg.model.n_positions,
-        n_embd=cfg.model.n_embd,
-        n_layer=cfg.model.n_layer,
-        n_head=cfg.model.n_head,
-    ).to(device)
+    # model = MultiTaskTGMMModel(
+    #     task=task,
+    #     n_positions=cfg.model.n_positions,
+    #     n_embd=cfg.model.n_embd,
+    #     n_layer=cfg.model.n_layer,
+    #     n_head=cfg.model.n_head,
+    # ).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=cfg.train.learning_rate,

@@ -1,8 +1,10 @@
+import math
 from typing import List, Union
 from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
+from prompt_toolkit.utils import SPHINX_AUTODOC_RUNNING
 
 from .utils import (
     _cos,
@@ -215,17 +217,78 @@ class IsotropicGaussianMixtureTask(Task):
         return task_sample
 
 
+@dataclass
+class SphericalGaussianMixtureTask(IsotropicGaussianMixtureTask):
+    r"""For conducting phase-transition experiments
+    The methodology is inspired by the paper
+    ``Sharp optimal recovery in the two component Gaussian mixture model``
+    https://arxiv.org/abs/1812.08078
+    """
+
+    delta: float = 1.  # Required param indicating l2-distance between means
+    a: float = 1.
+    b: float = 1.
+
+    def _sample_mixture_probs(self, batch_size):
+        r"""As recovery guarantees have nothing to do with mixture probs
+        Use the optimistic setup"""
+        return torch.ones(batch_size, self.n_components) / 2
+
+    def _sample_mean(self, batch_size):
+        r"""Samples points uniformly from the surface of an n-dimensional unit sphere."""
+        gaussian_means = torch.rand(batch_size, self.dim)
+        norm = gaussian_means.norm(dim=1, keepdim=True)
+        _mean_normed = gaussian_means / norm
+        return torch.stack(
+            [_mean_normed, -_mean_normed],
+            dim=-1
+        ) * self.delta / 2
+
+    @classmethod
+    def abn_config(cls, a, b, n):
+        r"""The experimental configuration in the Ndaoud paper"""
+        delta = math.sqrt(
+            (1 + math.sqrt(a)) * math.log(n)
+        )
+        d = int(b * n * math.log(n))
+        return cls(
+            n_components=2,
+            dim=d,
+            delta=delta,
+            a=a,
+            b=b,
+        )
+
+
 class MultiTaskIsotropicGaussianMixtureTask(Task):
     r"""Isotropic GMM task that contains a mixture of tasks with
     different components."""
 
-    def __init__(self, tasks: List[IsotropicGaussianMixtureTask]):
+    def __init__(
+        self,
+        tasks: List[
+            Union[
+                IsotropicGaussianMixtureTask,
+                SphericalGaussianMixtureTask,
+            ]
+        ]
+    ):
         dim = tasks[0].dim
         assert all(task.dim == dim for task in tasks)
         self.tasks = tasks
         self.dim = dim
         self.subtask_components = [task.n_components for task in self.tasks]
         self.max_n_components = max(self.subtask_components)
+
+    @classmethod
+    def abn_config(cls, a_s, b, n):
+        r"""The experimental configuration in the Ndaoud paper,
+        with an array of deltas but fix p"""
+        tasks = [
+            SphericalGaussianMixtureTask.abn_config(a, b, n)
+            for a in a_s
+        ]
+        return cls(tasks)
 
     @property
     def n_subtasks(self):
