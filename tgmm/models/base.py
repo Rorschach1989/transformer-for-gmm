@@ -1,7 +1,7 @@
 import multiprocessing
 
 import torch
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, parallel_config
 
 
 class _BatchFitMixin(object):
@@ -21,9 +21,10 @@ class _BatchFitMixin(object):
         # result_pack = []
         # for i in range(batch_size):
         #     result_pack.append(self.fit(batch_X[i], *args, **kwargs))
-        result_pack = Parallel(n_jobs=self.n_jobs)(
-            delayed(self.fit)(batch_X[i], *args, **kwargs) for i in range(batch_size)
-        )
+        with parallel_config("multiprocessing"):
+            result_pack = Parallel(n_jobs=self.n_jobs)(
+                delayed(self.fit)(batch_X[i], *args, **kwargs) for i in range(batch_size)
+            )
         outputs = []
         for t in zip(*result_pack):
             outputs.append(torch.stack(t, dim=0))

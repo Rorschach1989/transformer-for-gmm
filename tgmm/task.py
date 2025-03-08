@@ -235,13 +235,16 @@ class SphericalGaussianMixtureTask(IsotropicGaussianMixtureTask):
 
     def _sample_mean(self, batch_size):
         r"""Samples points uniformly from the surface of an n-dimensional unit sphere."""
-        gaussian_means = torch.rand(batch_size, self.dim)
+        gaussian_means = torch.randn(batch_size, self.dim)
         norm = gaussian_means.norm(dim=1, keepdim=True)
         _mean_normed = gaussian_means / norm
-        return torch.stack(
+        mean_sampled = torch.stack(
             [_mean_normed, -_mean_normed],
             dim=-1
         ) * self.delta / 2
+        # **Notes**: Transformer may take shortcuts to find that two opposite vector
+        # should be learned, break this
+        return mean_sampled + (torch.randn(batch_size, self.dim) * self.delta).unsqueeze(-1)
 
     @classmethod
     def abn_config(cls, a, b, n):
