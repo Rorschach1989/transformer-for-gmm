@@ -60,8 +60,12 @@ def _compute_gmm_ll(X, mu, alpha, scale: Union[float, torch.Tensor] = None):
     batch_size, n_components, d = mu.size()
     n_sample = X.size(1)
     covariances = _preprocess_scale(scale, batch_size, d, n_components)
-    inv_covariances = torch.inverse(covariances)  # [b, k, d, d]
-    log_det = torch.logdet(2 * torch.pi * covariances)  # [b, k]
+    if scale is None:
+        inv_covariances = covariances
+        log_det = torch.log(2 * torch.pi * torch.ones(batch_size, n_components)) * d  # [b, k]
+    else:
+        inv_covariances = torch.inverse(covariances)  # [b, k, d, d]
+        log_det = torch.logdet(2 * torch.pi * covariances)  # [b, k]
     diff = (X.unsqueeze(2) - mu.unsqueeze(1)).permute((0, 2, 1, 3))  # [b, k, n, d]
     exponent = -0.5 * ((diff @ inv_covariances) * diff).sum(dim=-1)  # [b, k, n]
     log_prob_density = exponent - 0.5 * log_det.unsqueeze(-1)  # [b, k, n]
