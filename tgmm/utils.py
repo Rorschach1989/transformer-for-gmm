@@ -204,6 +204,7 @@ def setup_cfg(**kwargs):
     eval_n_sample = kwargs.get("eval_n_sample", "128").split(",")
     cfg.eval.n_sample = [int(n) for n in eval_n_sample]
     cfg.eval.batch_size = kwargs.get("eval_batch_size", 128)
+    cfg.eval.ood_perturbation_scale = kwargs.get("ood_perturbation_scale", 0.)
     return cfg
 
 
@@ -222,6 +223,8 @@ def gen_name_from_cfg(cfg):
             cfg.train.n_sample,
             cfg.eval.n_sample,
         ]
+        if cfg.eval.ood_perturbation_scale > 0:
+            out_fields.extend(f"{cfg.eval.ood_perturbation_scale:.1f}")
     else:
         a_conf = [min(cfg.task.a_s), max(cfg.task.a_s), len(cfg.task.a_s)]
         b_conf = f"{cfg.task.b:.4f}"

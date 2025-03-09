@@ -217,6 +217,37 @@ class IsotropicGaussianMixtureTask(Task):
 
 
 @dataclass
+class OODIsotropicGaussianMixtureTask(IsotropicGaussianMixtureTask):
+    r"""Wrapping IsotropicGaussianMixtureTask with OOD perturbations
+    Only use during evaluation."""
+
+    perturbation_scale: float = 1.
+
+    @classmethod
+    def from_id_task(
+        cls,
+        id_task: IsotropicGaussianMixtureTask,
+        perturbation_scale: float = 1.
+    ):
+        return cls(
+            n_components=id_task.n_components,
+            dim=id_task.dim,
+            scale=id_task.scale,
+            perturbation_scale=perturbation_scale,
+        )
+
+    def _sample_mean(self, batch_size):
+        benign_means = super(
+            OODIsotropicGaussianMixtureTask,
+            self
+        )._sample_mean(batch_size)
+        return benign_means + torch.randn_like(
+            benign_means,
+            device=benign_means.device
+        ) * self.perturbation_scale
+
+
+@dataclass
 class SphericalGaussianMixtureTask(IsotropicGaussianMixtureTask):
     r"""For conducting phase-transition experiments
     The methodology is inspired by the paper

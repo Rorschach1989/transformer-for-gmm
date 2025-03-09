@@ -47,6 +47,9 @@ parser.add_argument(
     "--eval_n_sample", type=str, nargs="*", help="Length during evaluation, seperated by comma"
 )
 parser.add_argument(
+    "--ood_perturbation_scale", type=float, nargs="*", help="OOD perturbation scale"
+)
+parser.add_argument(
     "--num_train_steps", type=int, default=10001, help="Number of training steps"
 )
 parser.add_argument(
@@ -120,6 +123,7 @@ def _config_standard(args):
     manager.register_field("num_train_steps", args.num_train_steps)
     manager.register_field("learning_rate", args.learning_rate)
     manager.register_field("weight_decay", args.weight_decay)
+    manager.register_field("ood_perturbation_scale", args.ood_perturbation_scale)
     return manager
 
 

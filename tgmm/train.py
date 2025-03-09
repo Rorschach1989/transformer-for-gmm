@@ -12,6 +12,7 @@ from .logger import logger
 from .evaluation import GMMEvaluator
 from .task import (
     IsotropicGaussianMixtureTask,
+    OODIsotropicGaussianMixtureTask,
     SphericalGaussianMixtureTask,
     MultiTaskIsotropicGaussianMixtureTask,
     concat_task_sample
@@ -92,6 +93,11 @@ def evaluate(
         else:
             prefix = f"K_{subtask.n_components}-N_{eval_n_sample}"
         with torch.no_grad():
+            if cfg.eval.ood_perturbation_scale > 0.:
+                subtask = OODIsotropicGaussianMixtureTask.from_id_task(
+                    subtask,
+                    perturbation_scale=cfg.eval.ood_perturbation_scale
+                )
             task_sample = subtask.sample(
                 n_sample=eval_n_sample,
                 batch_size=cfg.eval.batch_size,
