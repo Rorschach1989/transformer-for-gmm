@@ -3,7 +3,12 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import GPT2Model, GPT2Config
+from transformers import (
+    GPT2Model,
+    GPT2Config,
+    Mamba2Model,
+    Mamba2Config
+)
 
 from ..task import (
     IsotropicGaussianMixtureSample,
@@ -118,37 +123,57 @@ class TGMMModel(nn.Module):
 class MultiTaskTGMMModel(nn.Module):
     r"""Multi-task version of TGMMModel"""
 
+    @staticmethod
+    def _prepare_model(model_type, **model_args):
+        if model_type == "transformer":
+            n_positions = model_args.get("n_positions", 100)
+            n_embd = model_args.get("n_embd", 128)
+            n_layer = model_args.get("n_layer", 12)
+            n_head = model_args.get("n_head", 4)
+            transformer_config = GPT2Config(
+                n_positions=n_positions,
+                n_embd=n_embd,
+                n_layer=n_layer,
+                n_head=n_head,
+                resid_pdrop=0.0,
+                embd_pdrop=0.0,
+                attn_pdrop=0.0,
+                use_cache=False,
+            )
+            return transformer_config, GPT2Model(transformer_config)
+        elif model_type == "mamba2":
+            mamba2_config = Mamba2Config(
+                num_heads=model_args.get("num_heads", 8),
+                head_dim=model_args.get("head_dim", 64),
+                hidden_size=model_args.get("hidden_size", 128),
+                state_size=model_args.get("state_size", 16),
+                n_groups=model_args.get("n_groups", 2),
+                expand=model_args.get("expand", 4),
+                num_hidden_layers=model_args.get("num_hidden_layers", 12)
+            )
+            return mamba2_config, Mamba2Model(mamba2_config)
+        else:
+            raise NotImplementedError
+
     def __init__(
         self,
         task: MultiTaskIsotropicGaussianMixtureTask,
-        n_positions=100,
-        n_embd=128,
-        n_layer=12,
-        n_head=4,
+        model_type="transformer",
         n_task_embd=128,
+        **kwargs,
     ):
         super(MultiTaskTGMMModel, self).__init__()
         # TODO: Allow more transformer configurations
-        transformer_config = GPT2Config(
-            n_positions=n_positions,
-            n_embd=n_embd,
-            n_layer=n_layer,
-            n_head=n_head,
-            resid_pdrop=0.0,
-            embd_pdrop=0.0,
-            attn_pdrop=0.0,
-            use_cache=False,
-        )
         self.task = task
         self.n_components = self.task.max_n_components
         self.n_subtasks = self.task.n_subtasks
         self.subtask_components = self.task.subtask_components
         # Task embedding that embed components
         self.task_embedding = nn.Embedding(self.n_components, n_task_embd)
-        n_embd = transformer_config.n_embd
+        n_embd = kwargs.get("n_embd", 128)
         # TODO: maybe enrich the method of injecting task information
         self.read_in = nn.Linear(self.task.dim + n_task_embd, n_embd)
-        self.transformer = GPT2Model(transformer_config)
+        self.config, self.encoder = self._prepare_model(model_type, **kwargs)
         d_out = self.n_components + self.task.dim
         self.read_outs = nn.ModuleList()
         for i in range(self.n_subtasks):
@@ -181,7 +206,7 @@ class MultiTaskTGMMModel(nn.Module):
         )
         x = torch.cat([x, task_embeds], dim=-1)
         embeds = self.read_in(x)
-        h = self.transformer(
+        h = self.encoder(
             inputs_embeds=embeds,
             attention_mask=inputs.mask_length,
         ).last_hidden_state

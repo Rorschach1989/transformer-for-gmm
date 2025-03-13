@@ -68,6 +68,10 @@ parser.add_argument("--a_n", type=int, default=20, help="Number of a")
 parser.add_argument("--b_min", type=float, default=0.1, help="Minimum b")
 parser.add_argument("--b_max", type=float, default=5, help="Maximum b")
 parser.add_argument("--b_n", type=int, default=20, help="Number of b")
+# Mamba architecture configs
+parser.add_argument(
+    "--model_type", type=str, default="transformer", help="Model type [transformer|mamba2]"
+)
 
 
 def _run(manager, cfg, device_queue, exp_name):
@@ -124,6 +128,8 @@ def _config_standard(args):
     manager.register_field("learning_rate", args.learning_rate)
     manager.register_field("weight_decay", args.weight_decay)
     manager.register_field("ood_perturbation_scale", args.ood_perturbation_scale)
+    # Alternative architecture configs
+    manager.register_field("model_type", args.model_type)
     return manager
 
 

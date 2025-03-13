@@ -79,7 +79,7 @@ def _get_default_device():
     if torch.cuda.is_available():
         return torch.device("cuda")
     elif torch.backends.mps.is_available():
-        return torch.device("mps")
+        return torch.device("cpu")
     else:
         return torch.device("cpu")
 
@@ -186,10 +186,24 @@ def setup_cfg(**kwargs):
     else:
         raise NotImplementedError
     cfg.model = {}
-    cfg.model.n_positions = kwargs.get("n_positions", 4096)
-    cfg.model.n_embd = kwargs.get("n_embd", 128)
-    cfg.model.n_layer = kwargs.get("n_layer", 12)
-    cfg.model.n_head = kwargs.get("n_head", 4)
+    cfg.model.model_type = kwargs.get("model_type", "transformer")
+    # Transformer arguments
+    if cfg.model.model_type == "transformer":
+        cfg.model.n_positions = kwargs.get("n_positions", 4096)
+        cfg.model.n_embd = kwargs.get("n_embd", 128)
+        cfg.model.n_layer = kwargs.get("n_layer", 12)
+        cfg.model.n_head = kwargs.get("n_head", 4)
+    # Mamba2 arguments, note that naming conventions are indeed different
+    else:
+        cfg.model.hidden_size = kwargs.get("hidden_size", 128)
+        cfg.model.num_heads = kwargs.get("num_heads", 8)
+        cfg.model.head_dim = kwargs.get("head_dim", 64)
+        cfg.model.state_size = kwargs.get("state_size", 16)
+        cfg.model.n_groups = kwargs.get("n_groups", 2)
+        cfg.model.expand = kwargs.get("expand", 4)
+        # Except for num_hidden_layers, the rest params shall be adjusted in a
+        # non-trivial way, keep this configuration for the time being
+        cfg.model.num_hidden_layers = kwargs.get("n_layer", 12)
     cfg.train = {}
     cfg.train.verbose = kwargs.get("verbose", False)
     cfg.train.seed = kwargs.get("seed", 42)
@@ -217,8 +231,8 @@ def gen_name_from_cfg(cfg):
             cfg.task.type,
             cfg.task.n_components,
             cfg.task.dim,
-            cfg.model.n_embd,
-            cfg.model.n_layer,
+            cfg.model.n_embd if cfg.model.model_type == "transformer" else cfg.model.hidden_size,
+            cfg.model.n_layer if cfg.model.model_type == "transformer" else cfg.model.num_hidden_layers,
             cfg.train.batch_size,
             cfg.train.n_sample,
             cfg.eval.n_sample,
@@ -374,7 +388,7 @@ def _append_values_recursively(target_dict, source_dict):
             target_dict.append(source_dict)
 
 
-def _tail_mean(t=10000):
+def _tail_mean(t=10):
     def f(seq):
         return np.mean(seq[-t:])
     return f

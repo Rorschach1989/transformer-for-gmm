@@ -43,12 +43,32 @@ def _init_task_and_model(cfg):
             for n in cfg.task.n_components
         ]
         task = MultiTaskIsotropicGaussianMixtureTask(task_list)
+        if cfg.model.model_type == "transformer":
+            model_args = {
+                "n_positions": cfg.model.n_positions,
+                "n_embd": cfg.model.n_embd,
+                "n_layer": cfg.model.n_layer,
+                "n_head": cfg.model.n_head,
+            }
+        else:
+            # Mamba2 arguments, note that naming conventions are indeed different
+            model_args = {
+                "hidden_size": cfg.model.hidden_size,
+                "num_heads": cfg.model.num_heads,
+                "num_hidden_layers": cfg.model.num_hidden_layers,
+                "head_dim": cfg.model.head_dim,
+                "state_size": cfg.model.state_size,
+                "n_groups": cfg.model.n_groups,
+                "expand": cfg.model.expand,
+            }
         model = MultiTaskTGMMModel(
             task=task,
-            n_positions=cfg.model.n_positions,
-            n_embd=cfg.model.n_embd,
-            n_layer=cfg.model.n_layer,
-            n_head=cfg.model.n_head,
+            model_type=cfg.model.model_type,
+            **model_args
+            # n_positions=cfg.model.n_positions,
+            # n_embd=cfg.model.n_embd,
+            # n_layer=cfg.model.n_layer,
+            # n_head=cfg.model.n_head,
         )
     elif cfg.task.type == "PhaseTransitionGaussianMixture":
         # Use a-b-n configuration from https://arxiv.org/abs/1812.08078
