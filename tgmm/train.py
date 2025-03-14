@@ -65,10 +65,6 @@ def _init_task_and_model(cfg):
             task=task,
             model_type=cfg.model.model_type,
             **model_args
-            # n_positions=cfg.model.n_positions,
-            # n_embd=cfg.model.n_embd,
-            # n_layer=cfg.model.n_layer,
-            # n_head=cfg.model.n_head,
         )
     elif cfg.task.type == "PhaseTransitionGaussianMixture":
         # Use a-b-n configuration from https://arxiv.org/abs/1812.08078
@@ -204,15 +200,6 @@ def train(cfg, device_id, name: str = None):
 
     device = get_device(device_id)
     seed_everything(cfg.train.seed)
-    # Initialize task
-    # task_list = [
-    #     IsotropicGaussianMixtureTask(
-    #         n_components=n,
-    #         dim=cfg.task.dim,
-    #     )
-    #     for n in cfg.task.n_components
-    # ]
-    # task = MultiTaskIsotropicGaussianMixtureTask(task_list)
     task, model = _init_task_and_model(cfg)
     model = model.to(device)
     dataset = GaussianMixtureDataset(
@@ -228,13 +215,6 @@ def train(cfg, device_id, name: str = None):
         collate_fn=concat_task_sample,
     )
     it = iter(loader)
-    # model = MultiTaskTGMMModel(
-    #     task=task,
-    #     n_positions=cfg.model.n_positions,
-    #     n_embd=cfg.model.n_embd,
-    #     n_layer=cfg.model.n_layer,
-    #     n_head=cfg.model.n_head,
-    # ).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=cfg.train.learning_rate,
