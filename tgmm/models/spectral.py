@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import tensorly as tl
 
-from ..logger import logger
+from ..utils import logger
 from .base import _BatchFitMixin
 
 
@@ -23,13 +23,7 @@ class GaussianMixtureSpectral(_BatchFitMixin):
     https://github.com/avikdelta/Tensor_decomposition/tree/master/GMM
     """
 
-    def __init__(
-        self,
-        n_components,
-        normalize_weights=True,
-        verbose=False,
-        **kwargs
-    ):
+    def __init__(self, n_components, normalize_weights=True, verbose=False, **kwargs):
         self.n_components = n_components
         self.normalize_weights = normalize_weights
         self.tensor_factorizer = tl.decomposition.SymmetricCP(

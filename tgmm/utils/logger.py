@@ -1,7 +1,12 @@
+import os
+import json
 import traceback
 import sys
+from dataclasses import dataclass
 
 from transformers.utils import logging
+
+from .configuration import _get_root
 
 
 def log_exception_with_traceback(logger=None):
@@ -46,3 +51,24 @@ def create_logger(verbosity: int = logging.INFO):
 
 
 logger = create_logger()
+
+
+@dataclass
+class WandbProfile(object):
+    api_key: str = None
+    entity: str = None
+    project: str = None
+
+
+def get_wandb_api_key():
+    root = _get_root()
+    data_path = os.path.join(root, "data", "wandb.json")
+    if os.path.exists(data_path):
+        with open(data_path) as f:
+            profile_dict = json.load(f)
+            return WandbProfile(**profile_dict)
+    else:
+        return WandbProfile()
+
+
+wandb_profile = get_wandb_api_key()

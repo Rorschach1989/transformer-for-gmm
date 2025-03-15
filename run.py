@@ -9,13 +9,16 @@ from tgmm.utils import (
     HyperParamManager,
     get_device_count,
     gen_name_from_cfg,
+    logger,
+    log_exception_with_traceback,
 )
 from tgmm.train import train
-from tgmm.logger import logger, log_exception_with_traceback
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--n_jobs_per_device", default=1, type=int, help="Number of jobs per device")
+parser.add_argument(
+    "--n_jobs_per_device", default=1, type=int, help="Number of jobs per device"
+)
 parser.add_argument("--prefix", type=str, help="Prefix in all the experiments")
 parser.add_argument(
     "--exp_mode",
@@ -44,7 +47,10 @@ parser.add_argument(
     "--train_n_sample", type=int, nargs="*", help="Maximum length during training"
 )
 parser.add_argument(
-    "--eval_n_sample", type=str, nargs="*", help="Length during evaluation, seperated by comma"
+    "--eval_n_sample",
+    type=str,
+    nargs="*",
+    help="Length during evaluation, seperated by comma",
 )
 parser.add_argument(
     "--ood_perturbation_scale", type=float, nargs="*", help="OOD perturbation scale"
@@ -56,7 +62,7 @@ parser.add_argument(
     "--learning_rate", type=float, default=1e-3, help="Number of training steps"
 )
 parser.add_argument(
-    "--weight_decay", type=float, default=0., help="Number of training steps"
+    "--weight_decay", type=float, default=0.0, help="Number of training steps"
 )
 parser.add_argument(
     "--eval_every", type=int, default=1000, help="Evaluate every n steps"
@@ -70,7 +76,10 @@ parser.add_argument("--b_max", type=float, default=5, help="Maximum b")
 parser.add_argument("--b_n", type=int, default=20, help="Number of b")
 # Mamba architecture configs
 parser.add_argument(
-    "--model_type", type=str, default="transformer", help="Model type [transformer|mamba2]"
+    "--model_type",
+    type=str,
+    default="transformer",
+    help="Model type [transformer|mamba2]",
 )
 
 
@@ -88,13 +97,17 @@ def _run(manager, cfg, device_queue, exp_name):
         return {}
     finally:
         device_queue.put(device_id, timeout=1)
-        logger.info(f"Process {os.getpid()} has finished task {exp_name} on GPU {device_id}")
+        logger.info(
+            f"Process {os.getpid()} has finished task {exp_name} on GPU {device_id}"
+        )
 
 
 def _config_phase_transition(args):
     manager = HyperParamManager(args.recover_from)
     manager.register_field("task_type", "PhaseTransitionGaussianMixture")
-    manager.register_field("mixture_dim", -1)  # Mixture dim is auto-determined, skip here
+    manager.register_field(
+        "mixture_dim", -1
+    )  # Mixture dim is auto-determined, skip here
     a_min, a_max, a_n = args.a_min, args.a_max, args.a_n
     b_min, b_max, b_n = args.b_min, args.b_max, args.b_n
     a_s = np.linspace(a_min, a_max, args.a_n).tolist()
@@ -165,6 +178,7 @@ def main(args):
                 future.result()
             logger.info("All tasks done")
 
+
 if __name__ == "__main__":
-    mp.set_start_method('spawn')
+    mp.set_start_method("spawn")
     main(parser.parse_args())

@@ -8,17 +8,16 @@ from torch.utils.data import DataLoader
 from .models.tgmm import TGMMModel, MultiTaskTGMMModel
 from .models.em import GaussianMixtureEM
 from .models.spectral import GaussianMixtureSpectral
-from .logger import logger
 from .evaluation import GMMEvaluator
 from .task import (
     IsotropicGaussianMixtureTask,
     OODIsotropicGaussianMixtureTask,
     SphericalGaussianMixtureTask,
     MultiTaskIsotropicGaussianMixtureTask,
-    concat_task_sample
+    concat_task_sample,
 )
 from .dataset import GaussianMixtureDataset
-from .utils import seed_everything, wandb_profile, get_device, StreamingLossMeter
+from .utils import seed_everything, get_device, StreamingLossMeter
 
 
 def _init_task_and_model(cfg):
@@ -62,9 +61,7 @@ def _init_task_and_model(cfg):
                 "expand": cfg.model.expand,
             }
         model = MultiTaskTGMMModel(
-            task=task,
-            model_type=cfg.model.model_type,
-            **model_args
+            task=task, model_type=cfg.model.model_type, **model_args
         )
     elif cfg.task.type == "PhaseTransitionGaussianMixture":
         # Use a-b-n configuration from https://arxiv.org/abs/1812.08078
@@ -98,10 +95,7 @@ def evaluate(
     summary_dict = {}
 
     def _eval(
-        subtask: Union[
-            IsotropicGaussianMixtureTask,
-            SphericalGaussianMixtureTask
-        ],
+        subtask: Union[IsotropicGaussianMixtureTask, SphericalGaussianMixtureTask],
         eval_n_sample,
     ):
         if cfg.task.type == "PhaseTransitionGaussianMixture":
@@ -109,10 +103,9 @@ def evaluate(
         else:
             prefix = f"K_{subtask.n_components}-N_{eval_n_sample}"
         with torch.no_grad():
-            if cfg.eval.ood_perturbation_scale > 0.:
+            if cfg.eval.ood_perturbation_scale > 0.0:
                 subtask = OODIsotropicGaussianMixtureTask.from_id_task(
-                    subtask,
-                    perturbation_scale=cfg.eval.ood_perturbation_scale
+                    subtask, perturbation_scale=cfg.eval.ood_perturbation_scale
                 )
             task_sample = subtask.sample(
                 n_sample=eval_n_sample,
@@ -186,8 +179,9 @@ def evaluate(
         return summary
 
     # For legacy compatibility
-    n_samples = [cfg.eval.n_sample] \
-        if isinstance(cfg.eval.n_sample, int) else cfg.eval.n_sample
+    n_samples = (
+        [cfg.eval.n_sample] if isinstance(cfg.eval.n_sample, int) else cfg.eval.n_sample
+    )
     for subtask in task.tasks:
         for n in n_samples:
             summary_dict.update(_eval(subtask, n))
@@ -203,9 +197,7 @@ def train(cfg, device_id, name: str = None):
     task, model = _init_task_and_model(cfg)
     model = model.to(device)
     dataset = GaussianMixtureDataset(
-        batch_size=cfg.train.batch_size,
-        task=task,
-        n_sample=cfg.train.n_sample
+        batch_size=cfg.train.batch_size, task=task, n_sample=cfg.train.n_sample
     )
     loader = DataLoader(
         dataset=dataset,

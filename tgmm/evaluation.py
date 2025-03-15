@@ -5,8 +5,7 @@ from dataclasses import dataclass
 import torch
 import scipy.optimize as sco
 
-from .utils import _cos, _l2
-from .logger import logger, log_exception_with_traceback
+from .utils import _cos, _l2, logger, log_exception_with_traceback
 from .task import IsotropicGaussianMixtureTask, IsotropicGaussianMixtureSample
 
 
@@ -62,7 +61,9 @@ def _compute_gmm_ll(X, mu, alpha, scale: Union[float, torch.Tensor] = None):
     covariances = _preprocess_scale(scale, batch_size, d, n_components)
     if scale is None:
         inv_covariances = covariances
-        log_det = torch.log(2 * torch.pi * torch.ones(batch_size, n_components)) * d  # [b, k]
+        log_det = (
+            torch.log(2 * torch.pi * torch.ones(batch_size, n_components)) * d
+        )  # [b, k]
     else:
         inv_covariances = torch.inverse(covariances)  # [b, k, d, d]
         log_det = torch.logdet(2 * torch.pi * covariances)  # [b, k]

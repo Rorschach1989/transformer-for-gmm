@@ -7,7 +7,7 @@ from transformers import (
     GPT2Model,
     GPT2Config,
     Mamba2Model,
-    Mamba2Config
+    Mamba2Config,
 )
 
 from ..task import (
@@ -149,7 +149,7 @@ class MultiTaskTGMMModel(nn.Module):
                 state_size=model_args.get("state_size", 16),
                 n_groups=model_args.get("n_groups", 2),
                 expand=model_args.get("expand", 4),
-                num_hidden_layers=model_args.get("num_hidden_layers", 12)
+                num_hidden_layers=model_args.get("num_hidden_layers", 12),
             )
             return mamba2_config, Mamba2Model(mamba2_config)
         else:

@@ -3,7 +3,7 @@
 import torch
 import torch.nn.functional as F
 
-from ..logger import logger
+from ..utils import logger
 from .base import _BatchFitMixin
 
 
@@ -78,9 +78,8 @@ class GaussianMixtureEM(_BatchFitMixin):
 
         # Update means
         for k in range(self.n_components):
-            means[k] = (
-                torch.sum(responsibilities[:, k].view(-1, 1) * X, dim=0)
-                / (effective_samples[k] + 1e-15)
+            means[k] = torch.sum(responsibilities[:, k].view(-1, 1) * X, dim=0) / (
+                effective_samples[k] + 1e-15
             )
 
         if self.learnable_covariance:

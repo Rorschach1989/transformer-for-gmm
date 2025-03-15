@@ -104,7 +104,7 @@ class IsotropicGaussianMixtureTask(Task):
     _default_scale: float = 1.0
 
     # Misc params reserved for rejection sampling
-    _amplification_factor : float = 4.
+    _amplification_factor: float = 4.0
     _n_retries = 10
 
     def _sample_mean(self, batch_size):
@@ -221,13 +221,11 @@ class OODIsotropicGaussianMixtureTask(IsotropicGaussianMixtureTask):
     r"""Wrapping IsotropicGaussianMixtureTask with OOD perturbations
     Only use during evaluation."""
 
-    perturbation_scale: float = 1.
+    perturbation_scale: float = 1.0
 
     @classmethod
     def from_id_task(
-        cls,
-        id_task: IsotropicGaussianMixtureTask,
-        perturbation_scale: float = 1.
+        cls, id_task: IsotropicGaussianMixtureTask, perturbation_scale: float = 1.0
     ):
         return cls(
             n_components=id_task.n_components,
@@ -237,14 +235,14 @@ class OODIsotropicGaussianMixtureTask(IsotropicGaussianMixtureTask):
         )
 
     def _sample_mean(self, batch_size):
-        benign_means = super(
-            OODIsotropicGaussianMixtureTask,
-            self
-        )._sample_mean(batch_size)
-        return benign_means + torch.randn_like(
-            benign_means,
-            device=benign_means.device
-        ) * self.perturbation_scale
+        benign_means = super(OODIsotropicGaussianMixtureTask, self)._sample_mean(
+            batch_size
+        )
+        return (
+            benign_means
+            + torch.randn_like(benign_means, device=benign_means.device)
+            * self.perturbation_scale
+        )
 
 
 @dataclass
@@ -255,9 +253,9 @@ class SphericalGaussianMixtureTask(IsotropicGaussianMixtureTask):
     https://arxiv.org/abs/1812.08078
     """
 
-    delta: float = 1.  # Required param indicating l2-distance between means
-    a: float = 1.
-    b: float = 1.
+    delta: float = 1.0  # Required param indicating l2-distance between means
+    a: float = 1.0
+    b: float = 1.0
 
     def _sample_mixture_probs(self, batch_size):
         r"""As recovery guarantees have nothing to do with mixture probs
@@ -269,20 +267,19 @@ class SphericalGaussianMixtureTask(IsotropicGaussianMixtureTask):
         gaussian_means = torch.randn(batch_size, self.dim)
         norm = gaussian_means.norm(dim=1, keepdim=True)
         _mean_normed = gaussian_means / norm
-        mean_sampled = torch.stack(
-            [_mean_normed, -_mean_normed],
-            dim=-1
-        ) * self.delta / 2
+        mean_sampled = (
+            torch.stack([_mean_normed, -_mean_normed], dim=-1) * self.delta / 2
+        )
         # **Notes**: Transformer may take shortcuts to find that two opposite vector
         # should be learned, break this
-        return mean_sampled + (torch.randn(batch_size, self.dim) * self.delta).unsqueeze(-1)
+        return mean_sampled + (
+            torch.randn(batch_size, self.dim) * self.delta
+        ).unsqueeze(-1)
 
     @classmethod
     def abn_config(cls, a, b, n):
         r"""The experimental configuration in the Ndaoud paper"""
-        delta = math.sqrt(
-            (1 + math.sqrt(a)) * math.log(n)
-        )
+        delta = math.sqrt((1 + math.sqrt(a)) * math.log(n))
         d = int(b * n * math.log(n))
         return cls(
             n_components=2,
@@ -304,7 +301,7 @@ class MultiTaskIsotropicGaussianMixtureTask(Task):
                 IsotropicGaussianMixtureTask,
                 SphericalGaussianMixtureTask,
             ]
-        ]
+        ],
     ):
         dim = tasks[0].dim
         assert all(task.dim == dim for task in tasks)
@@ -317,10 +314,7 @@ class MultiTaskIsotropicGaussianMixtureTask(Task):
     def abn_config(cls, a_s, b, n):
         r"""The experimental configuration in the Ndaoud paper,
         with an array of deltas but fix p"""
-        tasks = [
-            SphericalGaussianMixtureTask.abn_config(a, b, n)
-            for a in a_s
-        ]
+        tasks = [SphericalGaussianMixtureTask.abn_config(a, b, n) for a in a_s]
         return cls(tasks)
 
     @property
