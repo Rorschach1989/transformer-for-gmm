@@ -52,6 +52,8 @@ def _init_task_and_model(cfg):
                 "n_embd": cfg.model.n_embd,
                 "n_layer": cfg.model.n_layer,
                 "n_head": cfg.model.n_head,
+                "is_isotropic":
+                    cfg.task.type == "MultiTaskIsotropicGaussianMixture"
             }
         else:
             # Mamba2 arguments, note that naming conventions are indeed different
@@ -128,7 +130,7 @@ def evaluate(
                 alpha_est=F.softmax(model_output.alpha_est.cpu(), dim=-1),
                 in_sample_eval=True,
             )
-            alpha_loss, mu_loss, total_loss = loss_meter.compute()
+            alpha_loss, mu_loss, scale_loss, total_loss = loss_meter.compute()
             summary = {
                 "step": step,
                 f"{prefix}.tgmm_summary": eval_results_tgmm.summary_for_wandb(),
@@ -138,6 +140,9 @@ def evaluate(
                 ),
                 f"{prefix}.mu_loss": (
                     mu_loss.cpu().item() if mu_loss is not None else None
+                ),
+                f"{prefix}.scale_loss": (
+                    scale_loss.cpu().item() if scale_loss is not None else None
                 ),
                 f"{prefix}.total_loss": (
                     total_loss.cpu().item() if total_loss is not None else None
@@ -220,7 +225,7 @@ def train(cfg, device_id, name: str = None):
         weight_decay=cfg.train.weight_decay,
     )
     num_steps = cfg.train.num_train_steps
-    loss_meter = StreamingLossMeter(n_metrics=3, window_size=cfg.train.eval_every).to(
+    loss_meter = StreamingLossMeter(n_metrics=4, window_size=cfg.train.eval_every).to(
         device=device
     )
     model.train()
@@ -237,17 +242,26 @@ def train(cfg, device_id, name: str = None):
         optimizer.zero_grad()
         model_output = model(task_sample)
         total_loss = model_output.alpha_loss + model_output.mu_loss
+        if model_output.scale_loss is not None:
+            total_loss += model_output.scale_loss
         loss_meter.update(
             model_output.alpha_loss,
             model_output.mu_loss,
+            model_output.scale_loss or torch.zeros_like(total_loss),
             total_loss,
         )
         total_loss.backward()
         optimizer.step()
         if cfg.train.verbose:
+            alpha_loss = model_output.alpha_loss.cpu().detach().numpy()
+            mu_loss = model_output.mu_loss.cpu().detach().numpy()
+            scale_loss = model_output.scale_loss.cpu().detach().numpy()\
+                if model_output.scale_loss is not None else 0.
+            total_loss = total_loss.cpu().detach().numpy()
             pbar.set_description(
-                f"alpha_loss: {model_output.alpha_loss.cpu().detach().numpy():.4f}\t"
-                f"mu_loss: {model_output.mu_loss.cpu().detach().numpy():.4f}\t"
-                f"total_loss: {total_loss.cpu().detach().numpy():.4f}"
+                f"alpha_loss: {alpha_loss:.4f}\t"
+                f"mu_loss: {mu_loss:.4f}\t"
+                f"scale_loss: {scale_loss:.4f}\t"
+                f"total_loss: {total_loss:.4f}"
             )
     return eval_results

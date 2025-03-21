@@ -35,7 +35,7 @@ class IsotropicGaussianMixtureSample(object):
         for k, v in self.__dict__.items():
             if v is not None:
                 sample_kwargs[k] = v.to(device, **kwargs)
-        return IsotropicGaussianMixtureSample(**sample_kwargs)
+        return self.__class__(**sample_kwargs)
 
     def pad(self, pad_to_length):
         if self.mask_components is not None:
@@ -75,15 +75,41 @@ class AnisotropicGaussianMixtureSample(IsotropicGaussianMixtureSample):
     r"""For holding an anisotropic Gaussian sample"""
 
     def pad(self, pad_to_length):
-        super(AnisotropicGaussianMixtureSample, self).pad(pad_to_length)
-        length = int(self.mask_components.sum(dim=1).mean().item())
+        if self.mask_components is not None:
+            return  # Avoid re-padding
+        batch_size, length = self.mixture_probs.size()
         if length < pad_to_length:
             diff = pad_to_length - length
+            _ones = torch.ones_like(
+                self.mixture_probs, device=self.mixture_probs.device
+            )
+            self.mixture_probs = F.pad(
+                self.mixture_probs,
+                (0, diff),
+                mode="constant",
+                value=0.0,
+            )
+            self.gaussian_means = F.pad(
+                self.gaussian_means,
+                (0, 0, 0, diff, 0, 0),
+                mode="constant",
+                value=0.0,
+            )
             self.scale = F.pad(
                 self.scale,
                 (0, 0, 0, diff, 0, 0),
                 mode="constant",
                 value=1.0,
+            )
+            self.mask_components = F.pad(
+                _ones,
+                (0, diff),
+                mode="constant",
+                value=0.0,
+            )
+        else:
+            self.mask_components = torch.ones_like(
+                self.mixture_probs, device=self.mixture_probs.device
             )
 
 
