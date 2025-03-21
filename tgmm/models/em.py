@@ -88,8 +88,9 @@ class GaussianMixtureEM(_BatchFitMixin):
                 diff = X - means[k]
                 covariances[k] = (
                     diff.T @ (responsibilities[:, k].view(-1, 1) * diff)
-                ) / effective_samples[k]
-                # Regularization: Add a small value to the diagonal to ensure positive definiteness
+                ) / (effective_samples[k] + 1e-15)
+                # Only updates the diagonal part in anisotropic cases
+                covariances[k] = covariances[k] * torch.eye(self.n_features, device=self.device)
                 covariances[k] += 1e-6 * torch.eye(self.n_features, device=self.device)
         return means, covariances, weights
 

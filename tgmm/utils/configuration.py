@@ -20,7 +20,10 @@ def setup_cfg(**kwargs):
     if cfg.task.type == "IsotropicGaussianMixture":
         cfg.task.n_components = kwargs.get("n_components", 3)
         cfg.task.dim = kwargs.get("mixture_dim", 8)
-    elif cfg.task.type == "MultiTaskIsotropicGaussianMixture":
+    elif cfg.task.type in (
+        "MultiTaskIsotropicGaussianMixture",
+        "MultiTaskAnisotropicGaussianMixture",
+    ):
         n_components_max = kwargs.get("n_components_max", 3)
         n_components_min = kwargs.get("n_components_min", 2)
         if n_components_max < n_components_min:
@@ -73,6 +76,7 @@ def setup_cfg(**kwargs):
 def gen_name_from_cfg(cfg):
     if cfg.task.type in {
         "MultiTaskIsotropicGaussianMixture",
+        "MultiTaskAnisotropicGaussianMixture",
         "IsotropicGaussianMixture",
     }:
         out_fields = [

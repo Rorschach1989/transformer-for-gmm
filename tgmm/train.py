@@ -11,9 +11,10 @@ from .models.spectral import GaussianMixtureSpectral
 from .evaluation import GMMEvaluator
 from .task import (
     IsotropicGaussianMixtureTask,
+    AnisotropicGaussianMixtureTask,
     OODIsotropicGaussianMixtureTask,
     SphericalGaussianMixtureTask,
-    MultiTaskIsotropicGaussianMixtureTask,
+    MultiTaskGaussianMixtureTask,
     concat_task_sample,
 )
 from .dataset import GaussianMixtureDataset
@@ -33,15 +34,18 @@ def _init_task_and_model(cfg):
             n_layer=cfg.model.n_layer,
             n_head=cfg.model.n_head,
         )
-    elif cfg.task.type == "MultiTaskIsotropicGaussianMixture":
+    elif cfg.task.type in (
+        "MultiTaskIsotropicGaussianMixture",
+        "MultiTaskAnisotropicGaussianMixture",
+    ):
+        task_cls = IsotropicGaussianMixtureTask \
+            if cfg.task.type == "MultiTaskIsotropicGaussianMixture"\
+            else AnisotropicGaussianMixtureTask
         task_list = [
-            IsotropicGaussianMixtureTask(
-                n_components=n,
-                dim=cfg.task.dim,
-            )
+            task_cls(n_components=n, dim=cfg.task.dim)
             for n in cfg.task.n_components
         ]
-        task = MultiTaskIsotropicGaussianMixtureTask(task_list)
+        task = MultiTaskGaussianMixtureTask(task_list)
         if cfg.model.model_type == "transformer":
             model_args = {
                 "n_positions": cfg.model.n_positions,
@@ -65,7 +69,7 @@ def _init_task_and_model(cfg):
         )
     elif cfg.task.type == "PhaseTransitionGaussianMixture":
         # Use a-b-n configuration from https://arxiv.org/abs/1812.08078
-        task = MultiTaskIsotropicGaussianMixtureTask.abn_config(
+        task = MultiTaskGaussianMixtureTask.abn_config(
             a_s=cfg.task.a_s,
             b=cfg.task.b,
             n=cfg.train.n_sample,
@@ -83,7 +87,7 @@ def _init_task_and_model(cfg):
 
 
 def evaluate(
-    task: MultiTaskIsotropicGaussianMixtureTask,
+    task: MultiTaskGaussianMixtureTask,
     model: Union[TGMMModel, MultiTaskTGMMModel],
     device,
     loss_meter: StreamingLossMeter,
@@ -144,6 +148,9 @@ def evaluate(
                     n_components=subtask.n_components,
                     n_features=subtask.dim,
                     verbose=cfg.train.verbose,
+                    learnable_covariance=bool(
+                        cfg.task.type == "MultiTaskAnisotropicGaussianMixture"
+                    ),
                 )
                 gmm_spectral = GaussianMixtureSpectral(
                     n_components=subtask.n_components,

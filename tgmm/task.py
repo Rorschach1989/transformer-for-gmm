@@ -70,7 +70,28 @@ class IsotropicGaussianMixtureSample(object):
             )
 
 
-def concat_task_sample(sample_list: List[IsotropicGaussianMixtureSample]):
+@dataclass
+class AnisotropicGaussianMixtureSample(IsotropicGaussianMixtureSample):
+    r"""For holding an anisotropic Gaussian sample"""
+
+    def pad(self, pad_to_length):
+        super(AnisotropicGaussianMixtureSample, self).pad(pad_to_length)
+        length = int(self.mask_components.sum(dim=1).mean().item())
+        if length < pad_to_length:
+            diff = pad_to_length - length
+            self.scale = F.pad(
+                self.scale,
+                (0, 0, 0, diff, 0, 0),
+                mode="constant",
+                value=1.0,
+            )
+
+
+GaussianMixtureSample = Union[IsotropicGaussianMixtureSample, AnisotropicGaussianMixtureSample]
+
+
+def concat_task_sample(sample_list: List[GaussianMixtureSample]):
+    sample_cls = type(sample_list[0])
     pad_to_length = max(item.mixture_probs.size(1) for item in sample_list)
     for item in sample_list:
         item.pad(pad_to_length)
@@ -85,7 +106,7 @@ def concat_task_sample(sample_list: List[IsotropicGaussianMixtureSample]):
             kwargs[k] = torch.cat(kwargs[k], dim=0)
         else:
             kwargs[k] = None
-    return IsotropicGaussianMixtureSample(**kwargs)
+    return sample_cls(**kwargs)
 
 
 @dataclass
@@ -149,7 +170,7 @@ class IsotropicGaussianMixtureTask(Task):
         r"""Sample a batch of isotropic Gaussian scales"""
         # TODO: enable custom samplers
         scale = self.scale or self._default_scale
-        return torch.ones(batch_size) * scale
+        return (torch.ones(batch_size) * scale).view(-1, 1, 1)
 
     def _sample_seq_mask(self, batch_size, n_sample):
         n_max = n_sample
@@ -166,7 +187,7 @@ class IsotropicGaussianMixtureTask(Task):
         ).float()  # [batch_size, n_sample, n_components]
         _sample = torch.randn(
             batch_size, n_sample, self.dim, self.n_components
-        ) * scale.view(-1, 1, 1, 1) + gaussian_means.unsqueeze(1)
+        ) * scale.unsqueeze(1) + gaussian_means.unsqueeze(1)
         sample = torch.einsum("bndk,bnk->bnd", _sample, assignment_one_hot)
         return IsotropicGaussianMixtureSample(
             mixture_probs=mixture_probs,
@@ -214,6 +235,32 @@ class IsotropicGaussianMixtureTask(Task):
             mask_length = self._sample_seq_mask(batch_size, n_sample)
             task_sample.mask_length = mask_length
         return task_sample
+
+
+@dataclass
+class AnisotropicGaussianMixtureTask(IsotropicGaussianMixtureTask):
+    r"""Task for sampling anisotropic Gaussian mixture"""
+
+    def _sample_scale(self, batch_size):
+        _mean = self._sample_mean(batch_size) / 5
+        return F.softplus(_mean) * 2
+
+    def sample(self, n_sample, batch_size, *args, **kwargs):
+        _sample = super(AnisotropicGaussianMixtureTask, self).sample(
+            n_sample,
+            batch_size,
+            *args,
+            **kwargs,
+        )
+        return AnisotropicGaussianMixtureSample(
+            mixture_probs=_sample.mixture_probs,
+            assignment=_sample.assignment,
+            sample=_sample.sample,
+            gaussian_means=_sample.gaussian_means,
+            scale=torch.permute(_sample.scale, (0, 2, 1)),
+            mask_length=_sample.mask_length,
+            mask_components=_sample.mask_components,
+        )
 
 
 @dataclass
@@ -290,18 +337,21 @@ class SphericalGaussianMixtureTask(IsotropicGaussianMixtureTask):
         )
 
 
-class MultiTaskIsotropicGaussianMixtureTask(Task):
-    r"""Isotropic GMM task that contains a mixture of tasks with
+GaussianMixtureTask = Union[
+    IsotropicGaussianMixtureTask,
+    AnisotropicGaussianMixtureTask,
+    SphericalGaussianMixtureTask,
+    OODIsotropicGaussianMixtureTask,
+]
+
+
+class MultiTaskGaussianMixtureTask(Task):
+    r"""GMM task that contains a mixture of tasks with
     different components."""
 
     def __init__(
         self,
-        tasks: List[
-            Union[
-                IsotropicGaussianMixtureTask,
-                SphericalGaussianMixtureTask,
-            ]
-        ],
+        tasks: List[GaussianMixtureTask],
     ):
         dim = tasks[0].dim
         assert all(task.dim == dim for task in tasks)

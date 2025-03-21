@@ -13,7 +13,7 @@ from transformers import (
 from ..task import (
     IsotropicGaussianMixtureSample,
     IsotropicGaussianMixtureTask,
-    MultiTaskIsotropicGaussianMixtureTask,
+    MultiTaskGaussianMixtureTask,
 )
 
 
@@ -64,6 +64,9 @@ class TGMMOutput(object):
     mu_est: torch.Tensor
     alpha_loss: torch.Tensor
     mu_loss: torch.Tensor
+    # scale estimation is not necessary for Isotropic tasks
+    scale_est: torch.Tensor = None
+    scale_loss: torch.Tensor = None
 
 
 class TGMMModel(nn.Module):
@@ -157,7 +160,7 @@ class MultiTaskTGMMModel(nn.Module):
 
     def __init__(
         self,
-        task: MultiTaskIsotropicGaussianMixtureTask,
+        task: MultiTaskGaussianMixtureTask,
         model_type="transformer",
         n_task_embd=128,
         **kwargs,
@@ -165,6 +168,7 @@ class MultiTaskTGMMModel(nn.Module):
         super(MultiTaskTGMMModel, self).__init__()
         # TODO: Allow more transformer configurations
         self.task = task
+        self.is_isotropic = kwargs.pop("is_isotropic", True)
         self.n_components = self.task.max_n_components
         self.n_subtasks = self.task.n_subtasks
         self.subtask_components = self.task.subtask_components
@@ -174,7 +178,7 @@ class MultiTaskTGMMModel(nn.Module):
         # TODO: maybe enrich the method of injecting task information
         self.read_in = nn.Linear(self.task.dim + n_task_embd, n_embd)
         self.config, self.encoder = self._prepare_model(model_type, **kwargs)
-        d_out = self.n_components + self.task.dim
+        d_out = self.n_components + self.task.dim * (1 if self.is_isotropic else 2)
         self.read_outs = nn.ModuleList()
         for i in range(self.n_subtasks):
             self.read_outs.append(
@@ -187,6 +191,7 @@ class MultiTaskTGMMModel(nn.Module):
         # Loss functions
         self.alpha_loss = nn.CrossEntropyLoss()
         self.mu_loss = nn.MSELoss(reduction="none")
+        self.scale_loss = nn.MSELoss(reduction="none") if not self.is_isotropic else None
 
     def _map_component_ids(self, component_ids: torch.Tensor):
         # TODO: this is not the most efficient way
@@ -220,18 +225,43 @@ class MultiTaskTGMMModel(nn.Module):
             .view(-1, 1, 1, 1)
             .expand(-1, -1, out_combn.size(2), out_combn.size(3)),
         ).squeeze(dim=1)
-        alpha_est = results[:, :, : self.n_components].mean(dim=1)
-        mu_est = results[:, :, self.n_components :]
-        alpha_est = alpha_est - (1.0 - inputs.mask_components) * 1e9
-        alpha_loss_val = self.alpha_loss(alpha_est, inputs.mixture_probs)
-        mu_loss_val_ = self.mu_loss(mu_est, inputs.gaussian_means)  # [b, n, d]
-        mask = inputs.mask_components
-        mu_loss_sum_ = (mu_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
-        mu_loss_val = (mu_loss_sum_ / mask.sum(dim=1)).mean()
-        return TGMMOutput(
-            alpha_loss=alpha_loss_val,
-            mu_loss=mu_loss_val,
-            alpha_est=alpha_est,
-            mu_est=mu_est,
-            h=h,
-        )
+        # Separate logics between isotropic and anisotropic cases
+        # TODO: refine design
+        if self.is_isotropic:
+            alpha_est = results[:, :, : self.n_components].mean(dim=1)
+            mu_est = results[:, :, self.n_components :]
+            alpha_est = alpha_est - (1.0 - inputs.mask_components) * 1e9
+            alpha_loss_val = self.alpha_loss(alpha_est, inputs.mixture_probs)
+            mu_loss_val_ = self.mu_loss(mu_est, inputs.gaussian_means)  # [b, n, d]
+            mask = inputs.mask_components
+            mu_loss_sum_ = (mu_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
+            mu_loss_val = (mu_loss_sum_ / mask.sum(dim=1)).mean()
+            return TGMMOutput(
+                alpha_loss=alpha_loss_val,
+                mu_loss=mu_loss_val,
+                alpha_est=alpha_est,
+                mu_est=mu_est,
+                h=h,
+            )
+        else:
+            alpha_est = results[:, :, : self.n_components].mean(dim=1)
+            mu_est = results[:, :, self.n_components: (self.n_components + self.task.dim)]
+            scale_est = results[:, :, (self.n_components + self.task.dim):]
+            alpha_est = alpha_est - (1.0 - inputs.mask_components) * 1e9
+            alpha_loss_val = self.alpha_loss(alpha_est, inputs.mixture_probs)
+            mu_loss_val_ = self.mu_loss(mu_est, inputs.gaussian_means)  # [b, n, d]
+            scale_loss_val_ = self.scale_loss(scale_est, inputs.scale)
+            mask = inputs.mask_components
+            mu_loss_sum_ = (mu_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
+            mu_loss_val = (mu_loss_sum_ / mask.sum(dim=1)).mean()
+            scale_loss_sum_ = (scale_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
+            scale_loss_val = (scale_loss_sum_ / mask.sum(dim=1)).mean()
+            return TGMMOutput(
+                alpha_loss=alpha_loss_val,
+                mu_loss=mu_loss_val,
+                alpha_est=alpha_est,
+                mu_est=mu_est,
+                h=h,
+                scale_loss=scale_loss_val,
+                scale_est=scale_est,
+            )

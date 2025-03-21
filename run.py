@@ -22,9 +22,9 @@ parser.add_argument(
 parser.add_argument("--prefix", type=str, help="Prefix in all the experiments")
 parser.add_argument(
     "--exp_mode",
-    default="standard",
+    default="isotropic",
     type=str,
-    help="Experiment mode, can be either ``standard`` or ``phase_transition``",
+    help="Experiment mode, can be either ``isotropic``, ``anisotropic`` or ``phase_transition``",
 )
 parser.add_argument(
     "--recover_from", type=str, default=None, help="Recover from a local directory"
@@ -128,6 +128,11 @@ def _config_phase_transition(args):
 
 def _config_standard(args):
     manager = HyperParamManager(args.recover_from)
+    task_type_map = {
+        "isotropic": "MultiTaskIsotropicGaussianMixture",
+        "anisotropic": "MultiTaskAnisotropicGaussianMixture",
+    }
+    manager.register_field("task_type", task_type_map[args.exp_mode])
     manager.register_field("mixture_dim", args.mixture_dim)
     manager.register_field("n_components_max", args.n_components_max)
     manager.register_field("n_components_min", args.n_components_min)

@@ -23,7 +23,11 @@ def _preprocess_scale(scale, batch_size, d, n_components):
         ) * scale.view(
             -1, 1, 1
         )  # [b, d, d]
-    elif scale.ndim in {3, 4}:
+    elif scale.ndim == 3:
+        # This corresponds to the anisotropic case with [batch_size, n_components, dim]
+        # TODO: there could be the case that the semantics were [batch_size, dim, dim]
+        covariances = torch.einsum("bkd, de -> bkde", scale, torch.eye(d))
+    elif scale.ndim == 4:
         covariances = scale
     else:
         raise ValueError
@@ -47,8 +51,10 @@ def _compute_gmm_ll(X, mu, alpha, scale: Union[float, torch.Tensor] = None):
             - float: Indicates isotropic Gaussian that is identical across tasks
             - torch.Tensor: An array of shape [batch_size], indicating
                 isotropic for each task.
-            - torch.Tensor: A matrix of shape [batch_size, dim, dim], indicating
-                a shared covariance matrix for each task.
+            - torch.Tensor: An array of shape [batch_size, n_components, dim],
+                indicating an anisotropic Gaussian for each task.
+            - torch.Tensor: A matrix of shape [batch_size, n_components, dim],
+                indicating an anisotropic Gaussian for each task.
             - torch.Tensor: A matrix of shape [batch_size, n_components, dim, dim],
                 indicating a specified covariance matrix for each task.
 
@@ -64,6 +70,11 @@ def _compute_gmm_ll(X, mu, alpha, scale: Union[float, torch.Tensor] = None):
         log_det = (
             torch.log(2 * torch.pi * torch.ones(batch_size, n_components)) * d
         )  # [b, k]
+    elif isinstance(scale, torch.Tensor) and scale.ndim == 3:
+        inv_covariances = torch.einsum(
+            "bkd, de -> bkde", 1 / (scale + 1e-15), torch.eye(d)
+        )
+        log_det = torch.log(torch.tensor(2 * torch.pi)) + scale.log().sum(dim=-1)
     else:
         inv_covariances = torch.inverse(covariances)  # [b, k, d, d]
         log_det = torch.logdet(2 * torch.pi * covariances)  # [b, k]
