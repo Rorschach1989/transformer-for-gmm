@@ -246,7 +246,7 @@ class MultiTaskTGMMModel(nn.Module):
         else:
             alpha_est = results[:, :, : self.n_components].mean(dim=1)
             mu_est = results[:, :, self.n_components: (self.n_components + self.task.dim)]
-            scale_est = results[:, :, (self.n_components + self.task.dim):]
+            scale_est = F.softplus(results[:, :, (self.n_components + self.task.dim):])
             alpha_est = alpha_est - (1.0 - inputs.mask_components) * 1e9
             alpha_loss_val = self.alpha_loss(alpha_est, inputs.mixture_probs)
             mu_loss_val_ = self.mu_loss(mu_est, inputs.gaussian_means)  # [b, n, d]

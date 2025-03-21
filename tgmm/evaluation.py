@@ -108,8 +108,16 @@ class GMMEvaluationResult:
             out_str += f"{_out}\n"
         return out_str
 
+    def _filter_abnormal_likelihoods(self, threshold: float = -100.):
+        valid_indices = self.log_likelihood > threshold
+        self.log_likelihood = self.log_likelihood[valid_indices]
+        self.l2_error_means = self.l2_error_means[valid_indices]
+        self.l2_error_weights = self.l2_error_weights[valid_indices]
+        self.cluster_acc = self.cluster_acc[valid_indices]
+
     def summary_for_wandb(self):
         out_dict = {}
+        self._filter_abnormal_likelihoods()
         for k, v in self.__dict__.items():
             if isinstance(v, torch.Tensor):
                 mean = v.mean().item()
@@ -153,11 +161,18 @@ class GMMEvaluator(object):
         self,
         mu_est: torch.Tensor,
         alpha_est: torch.Tensor,
+        scale_est: torch.Tensor = None,
         in_sample_eval: bool = False,
         **kwargs,
     ):
         try:
-            return self._call(mu_est, alpha_est, in_sample_eval, **kwargs)
+            return self._call(
+                mu_est,
+                alpha_est,
+                scale_est,
+                in_sample_eval,
+                **kwargs
+            )
         except Exception as e:
             log_exception_with_traceback(logger)
             return GMMEvaluationResult(
@@ -171,6 +186,7 @@ class GMMEvaluator(object):
         self,
         mu_est: torch.Tensor,
         alpha_est: torch.Tensor,
+        scale_est: torch.Tensor = None,
         in_sample_eval: bool = False,
         **kwargs,
     ):
@@ -201,6 +217,7 @@ class GMMEvaluator(object):
             X=X,
             mu=mu_est,
             alpha=alpha_est,
+            scale=scale_est,
         )
         cluster_acc = (cluster_assignments == true_assignments).float().mean(dim=-1)
         return GMMEvaluationResult(

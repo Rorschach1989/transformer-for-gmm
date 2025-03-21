@@ -128,6 +128,8 @@ class GaussianMixtureEM(_BatchFitMixin):
             if iteration == self.max_iter - 1 and self.verbose:
                 logger.warn(f"Reach maximum iterations: {iteration + 1}.")
 
+        # Stabilize computation later
+        covariances = covariances @ torch.ones(self.n_features, device=self.device)
         return weights, means, covariances, torch.tensor(iteration, dtype=torch.float)
 
     def compute_log_likelihood(self, X, means, covariances, weights):

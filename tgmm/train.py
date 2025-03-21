@@ -125,9 +125,12 @@ def evaluate(
             # Adjust mask manually
             model_output.alpha_est = model_output.alpha_est[:, : subtask.n_components]
             model_output.mu_est = model_output.mu_est[:, : subtask.n_components, :]
+            if model_output.scale_est is not None:
+                model_output.scale_est = model_output.scale_est[:, : subtask.n_components, :]
             eval_results_tgmm = evaluator(
                 mu_est=model_output.mu_est.cpu(),
                 alpha_est=F.softmax(model_output.alpha_est.cpu(), dim=-1),
+                scale_est=model_output.scale_est.cpu() if model_output.scale_est is not None else None,
                 in_sample_eval=True,
             )
             alpha_loss, mu_loss, scale_loss, total_loss = loss_meter.compute()
@@ -163,7 +166,7 @@ def evaluate(
                     # n_repeat=100,
                     # n_iteration=20,
                 )
-                alpha_est_em, mu_est_em, _, iter_em = gmm_em.fit_batch(
+                alpha_est_em, mu_est_em, scale_est, iter_em = gmm_em.fit_batch(
                     task_sample.sample.cpu()
                 )
                 alpha_est_spectral, mu_est_spectral, _ = gmm_spectral.fit_batch(
@@ -172,6 +175,7 @@ def evaluate(
                 eval_results_em = evaluator(
                     mu_est=mu_est_em,
                     alpha_est=alpha_est_em,
+                    scale_est=scale_est if cfg.task.type == "MultiTaskAnisotropicGaussianMixture" else None,
                     in_sample_eval=True,
                 )
                 eval_results_spectral = evaluator(
