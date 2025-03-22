@@ -16,6 +16,7 @@ from .task import (
     SphericalGaussianMixtureTask,
     MultiTaskGaussianMixtureTask,
     concat_task_sample,
+    GaussianMixtureTask,
 )
 from .dataset import GaussianMixtureDataset
 from .utils import seed_everything, get_device, StreamingLossMeter
@@ -101,7 +102,7 @@ def evaluate(
     summary_dict = {}
 
     def _eval(
-        subtask: Union[IsotropicGaussianMixtureTask, SphericalGaussianMixtureTask],
+        subtask: Union[GaussianMixtureTask],
         eval_n_sample,
     ):
         if cfg.task.type == "PhaseTransitionGaussianMixture":

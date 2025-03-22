@@ -6,7 +6,7 @@ import torch
 import scipy.optimize as sco
 
 from .utils import _cos, _l2, logger, log_exception_with_traceback
-from .task import IsotropicGaussianMixtureTask, IsotropicGaussianMixtureSample
+from .task import GaussianMixtureTask, GaussianMixtureSample
 
 
 def _preprocess_scale(scale, batch_size, d, n_components):
@@ -92,6 +92,7 @@ def _compute_gmm_ll(X, mu, alpha, scale: Union[float, torch.Tensor] = None):
 class GMMEvaluationResult:
     l2_error_means: Union[torch.Tensor, float]
     l2_error_weights: Union[torch.Tensor, float]
+    l2_error_scale: Union[torch.Tensor, float]
     log_likelihood: Union[torch.Tensor, float]
     cluster_acc: Union[torch.Tensor, float]
 
@@ -108,16 +109,21 @@ class GMMEvaluationResult:
             out_str += f"{_out}\n"
         return out_str
 
-    def _filter_abnormal_likelihoods(self, threshold: float = -100.0):
-        valid_indices = self.log_likelihood > threshold
-        self.log_likelihood = self.log_likelihood[valid_indices]
-        self.l2_error_means = self.l2_error_means[valid_indices]
-        self.l2_error_weights = self.l2_error_weights[valid_indices]
-        self.cluster_acc = self.cluster_acc[valid_indices]
+    def _maybe_filter_abnormal_likelihoods(self, threshold: float = -100.0):
+        all_tensor_check = all(
+            isinstance(item, torch.Tensor)
+            for item in self.__dict__.values()
+        )
+        if all_tensor_check:
+            valid_indices = self.log_likelihood > threshold
+            self.log_likelihood = self.log_likelihood[valid_indices]
+            self.l2_error_means = self.l2_error_means[valid_indices]
+            self.l2_error_weights = self.l2_error_weights[valid_indices]
+            self.cluster_acc = self.cluster_acc[valid_indices]
 
     def summary_for_wandb(self):
         out_dict = {}
-        self._filter_abnormal_likelihoods()
+        self._maybe_filter_abnormal_likelihoods()
         for k, v in self.__dict__.items():
             if isinstance(v, torch.Tensor):
                 mean = v.mean().item()
@@ -134,8 +140,8 @@ class GMMEvaluator(object):
 
     def __init__(
         self,
-        task: IsotropicGaussianMixtureTask,
-        ground_truth: IsotropicGaussianMixtureSample,
+        task: GaussianMixtureTask,
+        ground_truth: GaussianMixtureSample,
         distance="l2",
     ):
         self.task = task
@@ -172,6 +178,7 @@ class GMMEvaluator(object):
             return GMMEvaluationResult(
                 l2_error_means=math.nan,
                 l2_error_weights=math.nan,
+                l2_error_scale=math.nan,
                 log_likelihood=math.nan,
                 cluster_acc=math.nan,
             )
@@ -193,6 +200,9 @@ class GMMEvaluator(object):
         l2_error_weights = (
             (self.ground_truth.mixture_probs - alpha_est).square().mean(dim=-1)
         )
+        l2_error_scale = (
+            (self.ground_truth.scale - scale_est).square().mean(dim=-1)
+        ) if scale_est is not None else torch.zeros_like(l2_error_means)
         if in_sample_eval:
             X = self.ground_truth.sample
             true_assignments = self.ground_truth.assignment
@@ -217,6 +227,7 @@ class GMMEvaluator(object):
         return GMMEvaluationResult(
             l2_error_means=l2_error_means,
             l2_error_weights=l2_error_weights,
+            l2_error_scale=l2_error_scale,
             log_likelihood=log_likelihood,
             cluster_acc=cluster_acc,
         )

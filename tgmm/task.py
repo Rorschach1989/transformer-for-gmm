@@ -375,6 +375,12 @@ GaussianMixtureTask = Union[
 ]
 
 
+GaussianMixtureSample = Union[
+    IsotropicGaussianMixtureSample,
+    AnisotropicGaussianMixtureSample,
+]
+
+
 class MultiTaskGaussianMixtureTask(Task):
     r"""GMM task that contains a mixture of tasks with
     different components."""
