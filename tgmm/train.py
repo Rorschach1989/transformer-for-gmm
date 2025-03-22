@@ -38,12 +38,13 @@ def _init_task_and_model(cfg):
         "MultiTaskIsotropicGaussianMixture",
         "MultiTaskAnisotropicGaussianMixture",
     ):
-        task_cls = IsotropicGaussianMixtureTask \
-            if cfg.task.type == "MultiTaskIsotropicGaussianMixture"\
+        task_cls = (
+            IsotropicGaussianMixtureTask
+            if cfg.task.type == "MultiTaskIsotropicGaussianMixture"
             else AnisotropicGaussianMixtureTask
+        )
         task_list = [
-            task_cls(n_components=n, dim=cfg.task.dim)
-            for n in cfg.task.n_components
+            task_cls(n_components=n, dim=cfg.task.dim) for n in cfg.task.n_components
         ]
         task = MultiTaskGaussianMixtureTask(task_list)
         if cfg.model.model_type == "transformer":
@@ -52,8 +53,7 @@ def _init_task_and_model(cfg):
                 "n_embd": cfg.model.n_embd,
                 "n_layer": cfg.model.n_layer,
                 "n_head": cfg.model.n_head,
-                "is_isotropic":
-                    cfg.task.type == "MultiTaskIsotropicGaussianMixture"
+                "is_isotropic": cfg.task.type == "MultiTaskIsotropicGaussianMixture",
             }
         else:
             # Mamba2 arguments, note that naming conventions are indeed different
@@ -126,11 +126,17 @@ def evaluate(
             model_output.alpha_est = model_output.alpha_est[:, : subtask.n_components]
             model_output.mu_est = model_output.mu_est[:, : subtask.n_components, :]
             if model_output.scale_est is not None:
-                model_output.scale_est = model_output.scale_est[:, : subtask.n_components, :]
+                model_output.scale_est = model_output.scale_est[
+                    :, : subtask.n_components, :
+                ]
             eval_results_tgmm = evaluator(
                 mu_est=model_output.mu_est.cpu(),
                 alpha_est=F.softmax(model_output.alpha_est.cpu(), dim=-1),
-                scale_est=model_output.scale_est.cpu() if model_output.scale_est is not None else None,
+                scale_est=(
+                    model_output.scale_est.cpu()
+                    if model_output.scale_est is not None
+                    else None
+                ),
                 in_sample_eval=True,
             )
             alpha_loss, mu_loss, scale_loss, total_loss = loss_meter.compute()
@@ -175,7 +181,11 @@ def evaluate(
                 eval_results_em = evaluator(
                     mu_est=mu_est_em,
                     alpha_est=alpha_est_em,
-                    scale_est=scale_est if cfg.task.type == "MultiTaskAnisotropicGaussianMixture" else None,
+                    scale_est=(
+                        scale_est
+                        if cfg.task.type == "MultiTaskAnisotropicGaussianMixture"
+                        else None
+                    ),
                     in_sample_eval=True,
                 )
                 eval_results_spectral = evaluator(
@@ -259,8 +269,11 @@ def train(cfg, device_id, name: str = None):
         if cfg.train.verbose:
             alpha_loss = model_output.alpha_loss.cpu().detach().numpy()
             mu_loss = model_output.mu_loss.cpu().detach().numpy()
-            scale_loss = model_output.scale_loss.cpu().detach().numpy()\
-                if model_output.scale_loss is not None else 0.
+            scale_loss = (
+                model_output.scale_loss.cpu().detach().numpy()
+                if model_output.scale_loss is not None
+                else 0.0
+            )
             total_loss = total_loss.cpu().detach().numpy()
             pbar.set_description(
                 f"alpha_loss: {alpha_loss:.4f}\t"

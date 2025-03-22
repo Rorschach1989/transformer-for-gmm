@@ -113,7 +113,9 @@ class AnisotropicGaussianMixtureSample(IsotropicGaussianMixtureSample):
             )
 
 
-GaussianMixtureSample = Union[IsotropicGaussianMixtureSample, AnisotropicGaussianMixtureSample]
+GaussianMixtureSample = Union[
+    IsotropicGaussianMixtureSample, AnisotropicGaussianMixtureSample
+]
 
 
 def concat_task_sample(sample_list: List[GaussianMixtureSample]):
@@ -246,8 +248,10 @@ class IsotropicGaussianMixtureTask(Task):
         gaussian_means = self._sample_mean(batch_size)
         scale = self._sample_scale(batch_size)
         # Check if batch_size shall be reduced
-        if gaussian_means.size(0) < batch_size:
-            batch_size = gaussian_means.size(0)
+        effective_batch_size = min(gaussian_means.size(0), scale.size(0))
+        if effective_batch_size < batch_size:
+            batch_size = effective_batch_size
+            gaussian_means = gaussian_means[:batch_size, ...]
             mixture_probs = mixture_probs[:batch_size, ...]
             scale = scale[:batch_size, ...]
         task_sample = self._sample(

@@ -191,7 +191,9 @@ class MultiTaskTGMMModel(nn.Module):
         # Loss functions
         self.alpha_loss = nn.CrossEntropyLoss()
         self.mu_loss = nn.MSELoss(reduction="none")
-        self.scale_loss = nn.MSELoss(reduction="none") if not self.is_isotropic else None
+        self.scale_loss = (
+            nn.MSELoss(reduction="none") if not self.is_isotropic else None
+        )
 
     def _map_component_ids(self, component_ids: torch.Tensor):
         # TODO: this is not the most efficient way
@@ -245,8 +247,10 @@ class MultiTaskTGMMModel(nn.Module):
             )
         else:
             alpha_est = results[:, :, : self.n_components].mean(dim=1)
-            mu_est = results[:, :, self.n_components: (self.n_components + self.task.dim)]
-            scale_est = F.softplus(results[:, :, (self.n_components + self.task.dim):])
+            mu_est = results[
+                :, :, self.n_components : (self.n_components + self.task.dim)
+            ]
+            scale_est = F.softplus(results[:, :, (self.n_components + self.task.dim) :])
             alpha_est = alpha_est - (1.0 - inputs.mask_components) * 1e9
             alpha_loss_val = self.alpha_loss(alpha_est, inputs.mixture_probs)
             mu_loss_val_ = self.mu_loss(mu_est, inputs.gaussian_means)  # [b, n, d]
@@ -254,7 +258,9 @@ class MultiTaskTGMMModel(nn.Module):
             mask = inputs.mask_components
             mu_loss_sum_ = (mu_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
             mu_loss_val = (mu_loss_sum_ / mask.sum(dim=1)).mean()
-            scale_loss_sum_ = (scale_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
+            scale_loss_sum_ = (
+                (scale_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
+            )
             scale_loss_val = (scale_loss_sum_ / mask.sum(dim=1)).mean()
             return TGMMOutput(
                 alpha_loss=alpha_loss_val,

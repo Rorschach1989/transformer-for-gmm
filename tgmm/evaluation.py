@@ -108,7 +108,7 @@ class GMMEvaluationResult:
             out_str += f"{_out}\n"
         return out_str
 
-    def _filter_abnormal_likelihoods(self, threshold: float = -100.):
+    def _filter_abnormal_likelihoods(self, threshold: float = -100.0):
         valid_indices = self.log_likelihood > threshold
         self.log_likelihood = self.log_likelihood[valid_indices]
         self.l2_error_means = self.l2_error_means[valid_indices]
@@ -166,13 +166,7 @@ class GMMEvaluator(object):
         **kwargs,
     ):
         try:
-            return self._call(
-                mu_est,
-                alpha_est,
-                scale_est,
-                in_sample_eval,
-                **kwargs
-            )
+            return self._call(mu_est, alpha_est, scale_est, in_sample_eval, **kwargs)
         except Exception as e:
             log_exception_with_traceback(logger)
             return GMMEvaluationResult(
