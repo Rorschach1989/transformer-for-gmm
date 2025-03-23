@@ -60,6 +60,7 @@ class ResultSummarizer(object):
 
     L2_ERR_MU = "l2_error_means_mean"
     L2_ERR_ALPHA = "l2_error_weights_mean"
+    L2_ERR_SCALE = "l2_error_scale_mean"
     LL = "log_likelihood_mean"
     CLUSTER_ACC = "cluster_acc_mean"
     EM_ITER = "em_iter"
@@ -71,6 +72,7 @@ class ResultSummarizer(object):
     _AGG_CONF = {
         L2_ERR_MU: _tail_mean(),
         L2_ERR_ALPHA: _tail_mean(),
+        L2_ERR_SCALE: _tail_mean(),
         LL: _tail_mean(),
         CLUSTER_ACC: _tail_mean(),
         EM_ITER: _tail_mean(),

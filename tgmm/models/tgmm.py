@@ -43,7 +43,6 @@ class AttentivePooling(nn.Module):
 
         Returns:
             torch.Tensor: output tensor of shape [batch_size, n_out, d_out]
-            mask (torch.Tensor): mask tensor of shape [batch_size, n_sample]
         """
         k, v = self.k_proj(x), self.v_proj(x)
         weights_ = k @ self.q.T
@@ -53,6 +52,20 @@ class AttentivePooling(nn.Module):
         weights = F.softmax(weights_, dim=1)  # [batch_size, seq_len, n_out]
         result = torch.einsum("bld,bln->bldn", v, weights).sum(dim=1)
         return torch.permute(result, (0, 2, 1))
+
+
+class _RNNReadout(nn.Module):
+    r"""Wrapper for readout function in RNN mode like Mamba
+    Only decoding the last hidden state"""
+
+    def __init__(self, d_in, d_out, n_out):
+        super(_RNNReadout, self).__init__()
+        self.d_out = d_out
+        self.n_out = n_out
+        self.proj = nn.Linear(d_in, d_out * n_out, bias=False)
+
+    def forward(self, x, mask: torch.Tensor = None):
+        return self.proj(x[:, -1, :]).view(-1, self.n_out, self.d_out)
 
 
 @dataclass
@@ -127,7 +140,7 @@ class MultiTaskTGMMModel(nn.Module):
     r"""Multi-task version of TGMMModel"""
 
     @staticmethod
-    def _prepare_model(model_type, **model_args):
+    def _prepare_backbone(model_type, **model_args):
         if model_type == "transformer":
             n_positions = model_args.get("n_positions", 100)
             n_embd = model_args.get("n_embd", 128)
@@ -158,6 +171,15 @@ class MultiTaskTGMMModel(nn.Module):
         else:
             raise NotImplementedError
 
+    @staticmethod
+    def _prepare_readout(model_type, **model_args):
+        if model_type == "transformer":
+            return AttentivePooling(**model_args)
+        elif model_type == "mamba2":
+            return _RNNReadout(**model_args)
+        else:
+            raise NotImplementedError
+
     def __init__(
         self,
         task: MultiTaskGaussianMixtureTask,
@@ -177,16 +199,13 @@ class MultiTaskTGMMModel(nn.Module):
         n_embd = kwargs.get("n_embd", 128)
         # TODO: maybe enrich the method of injecting task information
         self.read_in = nn.Linear(self.task.dim + n_task_embd, n_embd)
-        self.config, self.encoder = self._prepare_model(model_type, **kwargs)
+        self.config, self.encoder = self._prepare_backbone(model_type, **kwargs)
         d_out = self.n_components + self.task.dim * (1 if self.is_isotropic else 2)
         self.read_outs = nn.ModuleList()
+        readout_model_args = {"d_in": n_embd, "d_out": d_out, "n_out": self.n_components}
         for i in range(self.n_subtasks):
             self.read_outs.append(
-                AttentivePooling(
-                    d_in=n_embd,
-                    d_out=d_out,
-                    n_out=self.n_components,  # Use the largest K
-                )
+                self._prepare_readout(model_type, **readout_model_args)
             )
         # Loss functions
         self.alpha_loss = nn.CrossEntropyLoss()
