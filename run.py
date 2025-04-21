@@ -59,10 +59,10 @@ parser.add_argument(
     "--num_train_steps", type=int, default=10001, help="Number of training steps"
 )
 parser.add_argument(
-    "--learning_rate", type=float, default=1e-3, help="Number of training steps"
+    "--learning_rate", type=float, nargs="*", default=1e-3, help="Number of training steps"
 )
 parser.add_argument(
-    "--weight_decay", type=float, default=0.0, help="Number of training steps"
+    "--weight_decay", type=float, nargs="*", default=0.0, help="Number of training steps"
 )
 parser.add_argument(
     "--eval_every", type=int, default=1000, help="Evaluate every n steps"

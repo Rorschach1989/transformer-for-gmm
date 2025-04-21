@@ -56,7 +56,12 @@ class AttentivePooling(nn.Module):
 
 class _RNNReadout(nn.Module):
     r"""Wrapper for readout function in RNN mode like Mamba
-    Only decoding the last hidden state"""
+    Only decoding the last hidden state
+
+    **Notes**: According to some preliminary experiments, this
+    method seems to yield inferior results to ``AttentivePooling``
+    even with pure-RNN models.
+    """
 
     def __init__(self, d_in, d_out, n_out):
         super(_RNNReadout, self).__init__()
@@ -176,7 +181,8 @@ class MultiTaskTGMMModel(nn.Module):
         if model_type == "transformer":
             return AttentivePooling(**model_args)
         elif model_type == "mamba2":
-            return _RNNReadout(**model_args)
+            # return _RNNReadout(**model_args)
+            return AttentivePooling(**model_args)
         else:
             raise NotImplementedError
 
