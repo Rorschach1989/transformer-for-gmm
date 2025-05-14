@@ -311,15 +311,48 @@ class OODIsotropicGaussianMixtureTask(IsotropicGaussianMixtureTask):
             perturbation_scale=perturbation_scale,
         )
 
+    # def _sample_mean(self, batch_size):
+    #     benign_means = super(OODIsotropicGaussianMixtureTask, self)._sample_mean(
+    #         batch_size
+    #     )
+    #     return (
+    #         benign_means
+    #         + torch.randn_like(benign_means, device=benign_means.device)
+    #         * self.perturbation_scale
+    #     )
+
     def _sample_mean(self, batch_size):
-        benign_means = super(OODIsotropicGaussianMixtureTask, self)._sample_mean(
-            batch_size
-        )
-        return (
-            benign_means
-            + torch.randn_like(benign_means, device=benign_means.device)
-            * self.perturbation_scale
-        )
+        # TODO: too much heuristics here, can we be more rigorous?
+
+        def _gen(b):
+            # Expand batch size to create some buffer
+            _batch_size = int(self._amplification_factor * b)
+            gaussian_means = (
+                torch.rand(_batch_size, self.dim, self.n_components) - 0.5
+            ) * 10
+            gaussian_means = gaussian_means + torch.randn_like(
+                gaussian_means, device=gaussian_means.device
+            ) * self.perturbation_scale
+            self_sim = -_cos(
+                gaussian_means.permute(0, 2, 1), gaussian_means.permute(0, 2, 1)
+            )
+            mask = ~torch.eye(self.n_components, dtype=torch.bool)
+            mask = mask.unsqueeze(0).expand(_batch_size, -1, -1)
+            off_diagonal_entries = self_sim[mask].view(_batch_size, -1)
+            (indices,) = torch.where(off_diagonal_entries.max(dim=-1)[0] < 0.8)
+            return gaussian_means[indices][:b, :, :]
+
+        means = _gen(b=batch_size)
+        if means.size(0) < batch_size:
+            n_retries = 0
+            while n_retries < self._n_retries:
+                _patch = _gen(b=batch_size - means.size(0))
+                means = torch.cat((means, _patch), dim=0)
+                if means.size(0) == batch_size:
+                    break
+                n_retries += 1
+        # If maximum number of retries exceeded, return as-is with some post-fix
+        return means
 
 
 @dataclass
