@@ -7,6 +7,7 @@ task:
   - 5
   dim: 32
 model:
+  model_type: transformer
   n_positions: 4096
   n_embd: 128
   n_layer: 12
@@ -19,7 +20,7 @@ train:
   eval_every: 1000
   learning_rate: 0.0001
   weight_decay: 0.0001
-  num_train_steps: 100001
+  num_train_steps: 10001
 eval:
   n_sample:
   - 32
