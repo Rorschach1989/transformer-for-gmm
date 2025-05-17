@@ -6,7 +6,7 @@
 git clone https://github.com/Rorschach1989/transformer-for-gmm.git
 cd transformer-for-gmm
 pip install -r requirements.txt
-python run_one_config.py --config <your-config-here.yaml>
+python run_one_config.py --config config/example_config.yaml
 ```
 
 ## Run with a large grid
