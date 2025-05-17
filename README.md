@@ -1,112 +1,57 @@
-# Get started
+<div align="center">
+<h1> Transformers for Gaussian Mixture Models (TGMM)</h1>
+<h3>Transformers as Unsupervised Learning Algorithms: A study on Gaussian Mixtures</h3>
 
-## Run with some specified configuration
+Zhiheng Chen<sup>1</sup>, Ruofan Wu<sup>2</sup>, Guanhua Fang<sup>2</sup>
+
+<sup>1</sup> Shanghai Center for Mathematical Sciences, Fudan University  
+<sup>2</sup> Department of Statistics and Data Science, Fudan University
+
+</div>
+
+![](assets/tgmm.png)
+
+## Get started
+### Learning to solve an isotropic GMM
+> [!NOTE]
+> By the time of release, the codes are tested on ``python3.12`` with core libraries ``torch 2.7.0`` and ``transformers 4.51.3``.  
+
+Environment setup and example usage:
 
 ```shell
 git clone https://github.com/Rorschach1989/transformer-for-gmm.git
 cd transformer-for-gmm
+python3.12 -m venv tgmm
+source tgmm/bin/activate
 pip install -r requirements.txt
 python run_one_config.py --config config/example_config.yaml
 ```
 
-## Run with a large grid
-execute the following shell scritps
+### Alternative architectures
+The ``tgmm`` framework supports using [Mamba2](https://arxiv.org/abs/2405.21060) as the backbone by setting the ``model.model_type`` field to be ``mamba2``. To smoothly run tgmm experiments using the mamba2 architecture, it is highly recommended to install the additional requirements in [The official mamba repo](https://github.com/state-spaces/mamba).
+
+### Beyond isotropic GMMs
+The ``tgmm`` framework supports solving anisotropic GMM tasks via setting the ``task.type`` field to be ``MultiTaskAnisotropicGaussianMixture``
+
+### Reproduce results in the paper
+The following shell scripts reproduces the experimental results in our paper.
 
 ```shell
-git clone https://github.com/Rorschach1989/transformer-for-gmm.git
-cd transformer-for-gmm
-pip install -r requirements.txt
 chmod +x ./run_template.sh  # Or edit it to be any configurations of interest
 ./run_template.sh
 ```
 
-# Push to ``wandb``
+### Push to ``wandb``
 
-execute the following scripts
+The following script push all the experiment logs in ``<directory_to_push>`` to a wandb workspace named ``TGMM``. Remember to create this workspace before pushing.
 
 ```shell
-python push_to_wandb.py --project_root <directory_to_psh> --exp_prefix <some_prefix>
+python push_to_wandb.py --project_root <directory_to_push> --exp_prefix <some_prefix>
 ```
 
-in the current phase, it is recommended to set ``exp_prefix`` as ``stage1``
+## Acknowledgements
+Our implementation is partially inspired by the following repos:
+- [What Can Transformers Learn In-Context? A Case Study of Simple Function Classes](https://github.com/dtsip/in-context-learning)
+- [Transformers as Statisticians: Provable In-Context Learning with In-Context Algorithm Selection](https://github.com/allenbai01/transformers-as-statisticians)
 
-# Configuration explanations
-
-## Overview
-
-The configuration is divided into four main sections: `task`, `model`, `train`, and `eval`. Each section controls a different aspect of the experiment.
-
-## 1. `task` Section
-
-This section defines the specific type of GMM task the model will learn.
-
-```yaml
-task:
-  type: MultiTaskIsotropicGaussianMixture
-  n_components:
-  - 2
-  - 3
-  dim: 8
-```
-
-*   **`type: MultiTaskIsotropicGaussianMixture`**: This specifies the task type.  `MultiTask` suggests the model will be trained on multiple $K$ specs. `IsotropicGaussianMixture` indicates that the GMMs will have isotropic (spherical) covariance matrices.  This means each Gaussian component has a covariance matrix that is a scalar multiple of the identity matrix (equal variance in all dimensions).
-*   **`n_components: [2, 3]`**: This is a *list* defining the number of Gaussian components in the mixtures the model will encounter.  The model will be trained on GMMs with *both* 2 components *and* 3 components.
-*   **`dim: 8`**:  This sets the dimensionality of the data points generated from the GMMs. Each data point will be an 8-dimensional vector.
-
-## 2. `model` Section
-
-This section specifies the architecture of the transformer model.
-
-```yaml
-model:
-  n_positions: 4096
-  n_embd: 128
-  n_layer: 12
-  n_head: 4
-```
-
-*   **`n_positions: 4096`**: This is the maximum sequence length the transformer can handle. It represents the maximum number of tokens (or data points, in this case) the model can process in a single input sequence.  This is often related to the positional embeddings used in the transformer.
-*   **`n_embd: 128`**:  This is the dimensionality of the embedding space (also known as the hidden size or model dimension).  Each input token (or data point) will be projected into a 128-dimensional vector.
-*   **`n_layer: 12`**: This defines the number of transformer layers (or blocks) in the model. A deeper model (more layers) can potentially learn more complex relationships, but also requires more computational resources.
-*   **`n_head: 4`**: This is the number of attention heads in each transformer layer. Multi-head attention allows the model to attend to different parts of the input sequence simultaneously.
-
-## 3. `train` Section
-
-This section configures the training process.
-
-```yaml
-train:
-  verbose: false
-  seed: 42
-  n_sample: 64
-  batch_size: 32
-  eval_every: 1000
-  learning_rate: 0.001
-  weight_decay: 0.0001
-  num_train_steps: 10001
-```
-
-*   **`verbose: false`**: This controls the verbosity of the training log (whether to use ``tqdm`` or not). 
-*   **`seed: 42`**:  This sets the random seed for reproducibility. Using the same seed ensures that the random number generator will produce the same sequence of random numbers, leading to consistent results across multiple runs (assuming all other parameters are kept constant).
-*   **`n_sample: 64`**: This refers to the number of in-context samples drawn from the GMM. During training, ``n_sample`` is only an upper bound of $N$. Currently, the sampling logic is uniform between $[N/2, N]$
-*   **`batch_size: 32`**: This is the number of tasks during each training step.
-*   **`eval_every: 1000`**: This specifies how often the model is evaluated on evaluation tasks.
-*   **`learning_rate: 0.001`**: Learning rate for Adam/AdamW.
-*   **`weight_decay: 0.0001`**: Weight decay rate for Adam/AdamW.
-*   **`num_train_steps: 10001`**: This is the total number of training steps the model will undergo. The training process will run for 10001 iterations.
-
-## 4. `eval` Section
-
-This section sets up the evaluation parameters.
-
-```yaml
-eval:
-  n_sample:
-  - 32
-  - 64
-  - 128
-  batch_size: 128
-```
-
-*   **`n_sample: [32, 64, 128]`**: This refers to the number of in-context samples drawn from the GMM. To evaluate the capability of length generalization, several eval number of samples are specified.
-*   **`batch_size: 128`**: This is the number of tasks during each evaluation step, shall be large enough for stabilization of results. 
+## Citation
