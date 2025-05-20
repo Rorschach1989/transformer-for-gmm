@@ -9,7 +9,11 @@ Zhiheng Chen<sup>1</sup>, Ruofan Wu<sup>2</sup>, Guanhua Fang<sup>2</sup>
 
 </div>
 
-![](assets/tgmm.png)
+<p align="center">
+  <img src="assets/tgmm.png" alt="TGMM architecture illustration" width="75%" />
+</p>
+
+[![arXiv](https://img.shields.io/badge/arXiv-2505.11918-b31b1b.svg)](https://arxiv.org/abs/2505.11918)
 
 ## Get started
 ### Learning to solve an isotropic GMM
@@ -41,7 +45,7 @@ chmod +x ./run_template.sh  # Or edit it to be any configurations of interest
 ./run_template.sh
 ```
 
-### Push to ``wandb``
+### (Optional) Visualization via pushing to ``wandb``
 
 The following script push all the experiment logs in ``<directory_to_push>`` to a wandb workspace named ``TGMM``. Remember to create this workspace before pushing.
 
@@ -55,3 +59,16 @@ Our implementation is partially inspired by the following repos:
 - [Transformers as Statisticians: Provable In-Context Learning with In-Context Algorithm Selection](https://github.com/allenbai01/transformers-as-statisticians)
 
 ## Citation
+If you find this repository helpful, please consider giving a star ⭐ and a citation
+
+```bib
+@misc{chen2025transformersunsupervisedlearningalgorithms,
+      title={Transformers as Unsupervised Learning Algorithms: A study on Gaussian Mixtures}, 
+      author={Zhiheng Chen and Ruofan Wu and Guanhua Fang},
+      year={2025},
+      eprint={2505.11918},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2505.11918}, 
+}
+```
