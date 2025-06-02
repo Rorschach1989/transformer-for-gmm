@@ -137,6 +137,11 @@ def concat_task_sample(sample_list: List[GaussianMixtureSample]):
     return sample_cls(**kwargs)
 
 
+def concat_task_sample_hf(sample_list: List[GaussianMixtureSample]):
+    concat_sample = concat_task_sample(sample_list)
+    return concat_sample.__dict__
+
+
 @dataclass
 class IsotropicGaussianMixtureTask(Task):
     r"""Task for sampling IsotropicGaussianMixture.

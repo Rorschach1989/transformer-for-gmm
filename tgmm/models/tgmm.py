@@ -9,6 +9,10 @@ from transformers import (
     Mamba2Model,
     Mamba2Config,
 )
+# Stuffs related to Qwen3
+from transformers.models.qwen3 import (
+    Qwen3Model
+)
 
 from ..task import (
     IsotropicGaussianMixtureSample,
@@ -173,6 +177,11 @@ class MultiTaskTGMMModel(nn.Module):
                 num_hidden_layers=model_args.get("num_hidden_layers", 12),
             )
             return mamba2_config, Mamba2Model(mamba2_config)
+        elif model_type.startswith("qwen"):
+            pretrained_ckpt_path = model_args.get("pretrained_ckpt_path")
+            qwen_model = Qwen3Model.from_pretrained(pretrained_ckpt_path)
+            # TODO: we shall allow for fine-grained control of parameter tunability
+            return qwen_model.config, qwen_model
         else:
             raise NotImplementedError
 
@@ -182,6 +191,8 @@ class MultiTaskTGMMModel(nn.Module):
             return AttentivePooling(**model_args)
         elif model_type == "mamba2":
             # return _RNNReadout(**model_args)
+            return AttentivePooling(**model_args)
+        elif model_type.startswith("qwen"):
             return AttentivePooling(**model_args)
         else:
             raise NotImplementedError
@@ -202,7 +213,10 @@ class MultiTaskTGMMModel(nn.Module):
         self.subtask_components = self.task.subtask_components
         # Task embedding that embed components
         self.task_embedding = nn.Embedding(self.n_components, n_task_embd)
-        n_embd = kwargs.get("n_embd", 128)
+        if model_type.startswith("qwen"):
+            n_embd = 1024
+        else:
+            n_embd = kwargs.get("n_embd", 128)
         # TODO: maybe enrich the method of injecting task information
         self.read_in = nn.Linear(self.task.dim + n_task_embd, n_embd)
         self.config, self.encoder = self._prepare_backbone(model_type, **kwargs)
