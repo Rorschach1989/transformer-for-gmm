@@ -1,5 +1,6 @@
 import os
 os.environ["WANDB_DISABLED"] = "true"
+from argparse import ArgumentParser
 
 from transformers import TrainingArguments
 
@@ -22,7 +23,7 @@ training_args = TrainingArguments(
 )
 
 
-def main():
+def main(args):
     task_list = [
         IsotropicGaussianMixtureTask(n_components=n, dim=8)
         for n in range(2, 5)
@@ -33,7 +34,7 @@ def main():
     model = MultiTaskTGMMModel(
         task=task,
         model_type="qwen3-0.6B",
-        pretrained_ckpt_path = "/Users/zekkarorschach/Projects/llm/Qwen3-0.6B",
+        pretrained_ckpt_path=args.pretrained_ckpt_path,
     )
     trainer = TGMMQwenTrainer(
         model=model,
@@ -46,4 +47,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = ArgumentParser()
+    parser.add_argument("--pretrained_ckpt_path", type=str, required=True)
+    args = parser.parse_args()
+    main(args)
