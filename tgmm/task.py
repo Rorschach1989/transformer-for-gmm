@@ -1,5 +1,5 @@
 import math
-from typing import List, Union
+from typing import List, Union, Dict, Any
 from dataclasses import dataclass
 
 import torch
@@ -137,8 +137,19 @@ def concat_task_sample(sample_list: List[GaussianMixtureSample]):
     return sample_cls(**kwargs)
 
 
-def concat_task_sample_hf(sample_list: List[GaussianMixtureSample]):
-    concat_sample = concat_task_sample(sample_list)
+def concat_task_sample_hf(
+    sample_list: List[Union[GaussianMixtureSample, Dict[str, Any]]]
+):
+    if sample_list and isinstance(sample_list[0], Dict):
+        concat_sample = concat_task_sample(
+            [
+                # TODO: make this more configurable
+                IsotropicGaussianMixtureSample(**sample)
+                for sample in sample_list
+            ]
+        )
+    else:
+        concat_sample = concat_task_sample(sample_list)
     return concat_sample.__dict__
 
 

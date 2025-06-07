@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -89,6 +90,14 @@ class TGMMOutput(object):
     # scale estimation is not necessary for Isotropic tasks
     scale_est: torch.Tensor = None
     scale_loss: torch.Tensor = None
+
+    def to_predictions(self):
+        out_dict = OrderedDict()  # Make sure a canonical unpacking order
+        out_dict["alpha_est"] = self.alpha_est
+        out_dict["mu_est"] = self.mu_est
+        if self.scale_est is not None:
+            out_dict["scale_est"] = self.scale_est
+        return out_dict
 
 
 class TGMMModel(nn.Module):
@@ -310,3 +319,29 @@ class MultiTaskTGMMModel(nn.Module):
                 scale_loss=scale_loss_val,
                 scale_est=scale_est,
             )
+
+
+class HFMultiTaskTGMMModel(MultiTaskTGMMModel):
+    r"""A dispatching workaround for supporting TGMM
+    in huggingface transformers Trainer"""
+
+    def forward(
+        self,
+        mixture_probs,
+        assignment,
+        gaussian_means,
+        sample,
+        scale,
+        mask_length,
+        mask_components,
+    ):
+        inputs = IsotropicGaussianMixtureSample(
+            mixture_probs=mixture_probs,
+            assignment=assignment,
+            gaussian_means=gaussian_means,
+            sample=sample,
+            scale=scale,
+            mask_length=mask_length,
+            mask_components=mask_components,
+        )
+        return super(HFMultiTaskTGMMModel, self).forward(inputs)
