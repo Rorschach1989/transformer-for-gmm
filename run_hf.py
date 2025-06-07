@@ -26,9 +26,13 @@ training_args = TrainingArguments(
     per_device_train_batch_size=1,
     per_device_eval_batch_size=128,
     learning_rate=5e-5,
-    logging_steps=10,
+    logging_steps=100,
     eval_strategy="steps",
-    eval_steps=2,
+    eval_steps=200,
+    save_strategy="steps",
+    save_total_limit=1,
+    save_only_model=True,
+    save_steps=1000,
 )
 
 
@@ -38,7 +42,7 @@ def main(args):
         for n in range(2, 5)
     ]
     task = MultiTaskGaussianMixtureTask(task_list)
-    train_dataset = GaussianMixtureDataset(task=task, batch_size=4, n_sample=32)
+    train_dataset = GaussianMixtureDataset(task=task, batch_size=16, n_sample=32)
     eval_dataset = {
         t.n_components: StaticGaussianMixtureDataset(
             dataset_size=128,
