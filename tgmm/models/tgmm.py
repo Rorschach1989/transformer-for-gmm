@@ -4,6 +4,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from sympy.physics.units.systems.si import dimex
 from transformers import (
     GPT2Model,
     GPT2Config,
@@ -351,3 +352,100 @@ class MultiTaskInstructTGMMModel(nn.Module):
     r"""Augmenting TGMM using LLM backbones via incorporating instructions
     TODO: Current impl considers only isotropic, maybe enrich later"""
 
+    @staticmethod
+    def _prepare_backbone(pretrained_ckpt_path):
+        # TODO: enable more pretrained models
+        model = Qwen3Model.from_pretrained(pretrained_ckpt_path)
+        return model
+
+    def _map_component_ids(self, component_ids: torch.Tensor):
+        return torch.stack(
+            [
+                i * (component_ids == n_components - 1).long()
+                for i, n_components in enumerate(self.subtask_components)
+            ],
+            dim=1,
+        ).sum(dim=1)
+
+    def __init__(
+        self,
+        task,
+        pretrained_ckpt_path,
+    ):
+        super(MultiTaskInstructTGMMModel, self).__init__()
+        self.task = task
+        self.n_components = self.task.max_n_components
+        self.n_subtasks = self.task.n_subtasks
+        self.subtask_components = self.task.subtask_components
+        self.encoder = self._prepare_backbone(pretrained_ckpt_path)
+        self.hidden_size = self.encoder.config.hidden_size
+        self.data_projector = nn.Linear(
+            self.task.dim,
+            self.hidden_size,
+        )
+        self.read_outs = nn.ModuleList()
+        d_out = self.n_components + self.task.dim
+        for i in range(self.n_subtasks):
+            self.read_outs.append(
+                AttentivePooling(
+                    d_in=self.hidden_size,
+                    d_out=d_out,
+                    n_out=self.n_components,
+                )
+            )
+        # Loss functions
+        self.alpha_loss = nn.CrossEntropyLoss()
+        self.mu_loss = nn.MSELoss(reduction="none")
+
+    def forward(
+        self,
+        input_ids,
+        mixture_probs,
+        assignment,
+        gaussian_means,
+        sample,
+        scale,
+        mask_length,
+        mask_components,
+    ):
+        # Embed inputs
+        instruction_embeds = self.encoder.embed_tokens(input_ids)
+        # We do not need task embeddings anymore
+        # as they are handled in the instructions
+        data_embeds = self.data_projector(sample)
+        input_embeds = torch.cat(
+            [instruction_embeds, data_embeds],
+            dim=1
+        )
+        # print("+" * 100)
+        # print(instruction_embeds.shape, data_embeds.shape, input_embeds.shape, mask_length.shape)
+        component_ids = mask_components.sum(dim=1).long() - 1
+        h = self.encoder(
+            inputs_embeds=input_embeds,
+            attention_mask=mask_length,
+        ).last_hidden_state
+        out_combn = torch.stack(
+            [read_out(h, mask=mask_length) for read_out in self.read_outs], dim=1
+        )
+        results = torch.gather(
+            out_combn,
+            1,
+            self._map_component_ids(component_ids)
+            .view(-1, 1, 1, 1)
+            .expand(-1, -1, out_combn.size(2), out_combn.size(3)),
+        ).squeeze(dim=1)
+        alpha_est = results[:, :, : self.n_components].mean(dim=1)
+        mu_est = results[:, :, self.n_components:]
+        alpha_est = alpha_est - (1.0 - mask_components) * 1e9
+        alpha_loss_val = self.alpha_loss(alpha_est, mixture_probs)
+        mu_loss_val_ = self.mu_loss(mu_est, gaussian_means)  # [b, n, d]
+        mask = mask_components
+        mu_loss_sum_ = (mu_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
+        mu_loss_val = (mu_loss_sum_ / mask.sum(dim=1)).mean()
+        return TGMMOutput(
+            alpha_loss=alpha_loss_val,
+            mu_loss=mu_loss_val,
+            alpha_est=alpha_est,
+            mu_est=mu_est,
+            h=h,
+        )

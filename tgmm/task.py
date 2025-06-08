@@ -4,11 +4,14 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
+# For type hint of InstructTGMM tokenization
+from transformers import PreTrainedTokenizerFast
 
 from .utils import (
     _cos,
     sequence_length_to_mask,
 )
+from .utils.prompt import translate_to_prompt
 
 
 class Task(object):
@@ -151,6 +154,39 @@ def concat_task_sample_hf(
     else:
         concat_sample = concat_task_sample(sample_list)
     return concat_sample.__dict__
+
+
+def concat_task_sample_instruct(
+    sample_list: List[Union[GaussianMixtureSample, Dict[str, Any]]],
+    tokenizer: PreTrainedTokenizerFast,
+):
+    concat_sample = concat_task_sample_hf(sample_list)
+    messages = translate_to_prompt(
+        gaussian_means=concat_sample["gaussian_means"],
+        mask_components=concat_sample["mask_components"],
+        mask_length=concat_sample["mask_length"],
+        sample=concat_sample["sample"],
+    )
+    input_ids = tokenizer.apply_chat_template(
+        messages,
+        add_generation_prompt=False,
+        return_tensors="pt",
+    )
+    concat_sample["input_ids"] = input_ids
+    # Adjust input masks
+    mask_length = concat_sample["mask_length"]
+    if mask_length is not None:
+        instruction_mask = torch.ones_like(
+            input_ids,
+            device=mask_length.device,
+            dtype=mask_length.dtype,
+        )
+        mask_length = torch.cat(
+            [instruction_mask, mask_length],
+            dim=1
+        )
+        concat_sample["mask_length"] = mask_length
+    return concat_sample
 
 
 @dataclass
