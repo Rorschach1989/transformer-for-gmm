@@ -4,7 +4,6 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sympy.physics.units.systems.si import dimex
 from transformers import (
     GPT2Model,
     GPT2Config,
@@ -397,6 +396,14 @@ class MultiTaskInstructTGMMModel(nn.Module):
         self.alpha_loss = nn.CrossEntropyLoss()
         self.mu_loss = nn.MSELoss(reduction="none")
 
+    def freeze_backbone(self):
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+
+    def unfreeze_backbone(self):
+        for param in self.encoder.parameters():
+            param.requires_grad = True
+
     def forward(
         self,
         input_ids,
@@ -417,8 +424,6 @@ class MultiTaskInstructTGMMModel(nn.Module):
             [instruction_embeds, data_embeds],
             dim=1
         )
-        # print("+" * 100)
-        # print(instruction_embeds.shape, data_embeds.shape, input_embeds.shape, mask_length.shape)
         component_ids = mask_components.sum(dim=1).long() - 1
         h = self.encoder(
             inputs_embeds=input_embeds,

@@ -58,6 +58,7 @@ def main(args):
         task=task,
         pretrained_ckpt_path=args.pretrained_ckpt_path,
     )
+    model.freeze_backbone()
     tokenizer = AutoProcessor.from_pretrained(args.pretrained_ckpt_path)
     trainer = TGMMHFTrainer(
         model=model,

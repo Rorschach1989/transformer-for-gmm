@@ -3,12 +3,10 @@ from dataclasses import dataclass, field
 
 import torch
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
 from transformers import Trainer
 
 from .models.tgmm import TGMMOutput
 from .dataset import StaticGaussianMixtureDataset
-from .task import IsotropicGaussianMixtureSample
 from .evaluation import GMMEvaluator
 
 
