@@ -458,6 +458,7 @@ class MultiTaskGaussianMixtureTask(Task):
 
     def sample(self, n_sample, batch_size, *args, **kwargs):
         sample_list = [
-            task.sample(n_sample, batch_size, *args, **kwargs) for task in self.tasks
+            task.sample(n_sample, batch_size, *args, **kwargs)
+            for task in self.tasks
         ]
         return concat_task_sample(sample_list)

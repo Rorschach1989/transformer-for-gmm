@@ -80,9 +80,6 @@ class TGMMHFTrainer(Trainer):
                 ignore_keys=ignore_keys,
                 metric_key_prefix=metric_key_prefix,
             )
-            # print("+" * 100)
-            # print(len(output.predictions))
-            # print(output)
             if len(output.predictions) == 2:
                 alpha_est, mu_est = output.predictions
                 scale_est = None

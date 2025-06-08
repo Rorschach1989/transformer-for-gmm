@@ -345,3 +345,9 @@ class HFMultiTaskTGMMModel(MultiTaskTGMMModel):
             mask_components=mask_components,
         )
         return super(HFMultiTaskTGMMModel, self).forward(inputs)
+
+
+class MultiTaskInstructTGMMModel(nn.Module):
+    r"""Augmenting TGMM using LLM backbones via incorporating instructions
+    TODO: Current impl considers only isotropic, maybe enrich later"""
+

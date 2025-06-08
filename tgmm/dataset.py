@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from torch.utils.data import Dataset, IterableDataset
 
-from .task import Task
+from .task import Task, MultiTaskGaussianMixtureTask
 
 
 @dataclass
@@ -38,10 +38,10 @@ class GaussianMixtureDataset(IterableDataset):
 @dataclass
 class StaticGaussianMixtureDataset(Dataset):
     r"""A Gaussian mixture dataset that contains a static sample
-    used for evaluation only"""
+    **Notes**: used for evaluation only"""
 
     dataset_size: int
-    task: Task
+    task: MultiTaskGaussianMixtureTask
     n_sample: int
 
     def __post_init__(self):
@@ -50,6 +50,7 @@ class StaticGaussianMixtureDataset(Dataset):
         sample = self.task.sample(
             n_sample=self.n_sample,
             batch_size=self.dataset_size,
+            gen_mask=False,
         )
         self._sample = sample
         self.__dict__.update(sample.__dict__)

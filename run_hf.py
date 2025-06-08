@@ -33,6 +33,7 @@ training_args = TrainingArguments(
     save_total_limit=1,
     save_only_model=True,
     save_steps=1000,
+    gradient_accumulation_steps=2,
 )
 
 
