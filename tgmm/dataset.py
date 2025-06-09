@@ -53,6 +53,7 @@ class StaticGaussianMixtureDataset(Dataset):
             gen_mask=False,
         )
         self._sample = sample
+        self._sample_raw = sample.clone()
         self.__dict__.update(sample.__dict__)
 
     def __len__(self):
@@ -64,6 +65,7 @@ class StaticGaussianMixtureDataset(Dataset):
             "task",
             "n_sample",
             "_sample",
+            "_sample_raw",
         }
         output = {}
         for key, value in self.__dict__.items():
@@ -75,7 +77,7 @@ class StaticGaussianMixtureDataset(Dataset):
 
     @property
     def sample(self):
-        return self._sample.to("cpu")
+        return self._sample_raw.to("cpu")
 
     @property
     def n_components(self):

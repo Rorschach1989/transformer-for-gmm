@@ -33,6 +33,13 @@ class IsotropicGaussianMixtureSample(object):
     mask_length: torch.Tensor = None
     mask_components: torch.Tensor = None
 
+    def clone(self):
+        sample_kwargs = {}
+        for k, v in self.__dict__.items():
+            if v is not None:
+                sample_kwargs[k] = v.clone()
+        return self.__class__(**sample_kwargs)
+
     def to(self, device, **kwargs):
         sample_kwargs = {}
         for k, v in self.__dict__.items():
