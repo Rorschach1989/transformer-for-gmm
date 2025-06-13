@@ -434,7 +434,8 @@ class MultiTaskInstructTGMMModel(nn.Module):
         if self.ignore_text_embeddings:
             batch_size, n_sample, n_dim = sample.size()
             h = h[:, -n_sample:, :]
-            mask_length = mask_length[:, -n_sample:]
+            if mask_components is not None:
+                mask_length = mask_length[:, -n_sample:]
         out_combn = torch.stack(
             [read_out(h, mask=mask_length) for read_out in self.read_outs], dim=1
         )
