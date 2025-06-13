@@ -35,7 +35,7 @@ def main(args):
         for n in range(2, 5)
     ]
     task = MultiTaskGaussianMixtureTask(task_list)
-    train_dataset_stage1 = GaussianMixtureDataset(
+    train_dataset = GaussianMixtureDataset(
         task=task,
         batch_size=16,
         n_sample=32
@@ -53,7 +53,6 @@ def main(args):
         task=task,
         pretrained_ckpt_path=args.pretrained_ckpt_path,
     )
-    model.freeze_backbone()
 
     rank0_log("Freezing backbone and start stage1 training...")
 
@@ -84,7 +83,7 @@ def main(args):
     trainer = TGMMHFTrainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset_stage1,
+        train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tgmm_training_args=minor_options,
         data_collator=partial(
