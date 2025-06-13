@@ -370,6 +370,7 @@ class MultiTaskInstructTGMMModel(nn.Module):
         self,
         task,
         pretrained_ckpt_path,
+        ignore_text_embeddings=True,
     ):
         super(MultiTaskInstructTGMMModel, self).__init__()
         self.task = task
@@ -395,6 +396,7 @@ class MultiTaskInstructTGMMModel(nn.Module):
         # Loss functions
         self.alpha_loss = nn.CrossEntropyLoss()
         self.mu_loss = nn.MSELoss(reduction="none")
+        self.ignore_text_embeddings = ignore_text_embeddings
 
     def freeze_backbone(self):
         for param in self.encoder.parameters():
@@ -429,6 +431,10 @@ class MultiTaskInstructTGMMModel(nn.Module):
             inputs_embeds=input_embeds,
             attention_mask=mask_length,
         ).last_hidden_state
+        if self.ignore_text_embeddings:
+            batch_size, n_sample, n_dim = sample.size()
+            h = h[:, -n_sample:, :]
+            mask_length = mask_length[:, -n_sample:]
         out_combn = torch.stack(
             [read_out(h, mask=mask_length) for read_out in self.read_outs], dim=1
         )

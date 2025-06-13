@@ -19,6 +19,56 @@ from tgmm.utils.logger import logger
 local_rank = None
 
 
+def _get_stage1_training_args():
+    training_args = TrainingArguments(
+        output_dir="./output_stage1",
+        label_names=[
+            "mixture_probs",
+            "assignment",
+            "gaussian_means",
+            "scale",
+        ],
+        max_steps=10000,
+        per_device_train_batch_size=1,
+        per_device_eval_batch_size=128,
+        learning_rate=5e-5,
+        logging_steps=50,
+        eval_strategy="steps",
+        eval_steps=200,
+        save_strategy="steps",
+        save_total_limit=1,
+        save_only_model=True,
+        save_steps=1000,
+        gradient_accumulation_steps=2,
+    )
+    return training_args
+
+
+def _get_stage2_training_args():
+    training_args = TrainingArguments(
+        output_dir="./output_stage2",
+        label_names=[
+            "mixture_probs",
+            "assignment",
+            "gaussian_means",
+            "scale",
+        ],
+        max_steps=10000,
+        per_device_train_batch_size=1,
+        per_device_eval_batch_size=128,
+        learning_rate=1e-6,
+        logging_steps=50,
+        eval_strategy="steps",
+        eval_steps=200,
+        save_strategy="steps",
+        save_total_limit=1,
+        save_only_model=True,
+        save_steps=1000,
+        gradient_accumulation_steps=4,
+    )
+    return training_args
+
+
 def rank0_log(*args):
     if local_rank == 0:
         logger.info(*args)
@@ -58,32 +108,9 @@ def main(args):
     rank0_log("Freezing backbone and start stage1 training...")
 
     tokenizer = AutoProcessor.from_pretrained(args.pretrained_ckpt_path)
-
-    training_args = TrainingArguments(
-        output_dir="./output_stage1",
-        label_names=[
-            "mixture_probs",
-            "assignment",
-            "gaussian_means",
-            "scale",
-        ],
-        max_steps=10000,
-        per_device_train_batch_size=1,
-        per_device_eval_batch_size=128,
-        learning_rate=5e-5,
-        logging_steps=50,
-        eval_strategy="steps",
-        eval_steps=200,
-        save_strategy="steps",
-        save_total_limit=1,
-        save_only_model=True,
-        save_steps=1000,
-        gradient_accumulation_steps=2,
-    )
-
-    trainer = TGMMHFTrainer(
+    trainer_stage1 = TGMMHFTrainer(
         model=model,
-        args=training_args,
+        args=_get_stage1_training_args(),
         train_dataset=train_dataset_stage1,
         eval_dataset=eval_dataset,
         tgmm_training_args=minor_options,
@@ -92,7 +119,27 @@ def main(args):
             tokenizer=tokenizer,
         ),
     )
-    trainer.train()
+    trainer_stage1.train()
+
+    rank0_log("Unfreeze backbone and start stage2 training...")
+    model.unfreeze_backbone()
+    train_dataset_stage2 = GaussianMixtureDataset(
+        task=task,
+        batch_size=4,
+        n_sample=32
+    )
+    trainer_stage2 = TGMMHFTrainer(
+        model=model,
+        args=_get_stage2_training_args(),
+        train_dataset=train_dataset_stage2,
+        eval_dataset=eval_dataset,
+        tgmm_training_args=minor_options,
+        data_collator=partial(
+            concat_task_sample_instruct,
+            tokenizer=tokenizer,
+        ),
+    )
+    trainer_stage2.train()
 
     rank0_log("Training finished!")
 
