@@ -45,6 +45,13 @@ chmod +x ./run_template.sh  # Or edit it to be any configurations of interest
 ./run_template.sh
 ```
 
+### Integrate with (Open-source) large language models (InstructTGMM)
+The ``tgmm`` framework also supports passing input problems via language instructions with a minor tweak on the training procedure. Please refer to [this prompt](tgmm/utils/prompt.py) for our initial design of task instruction. An example script illustrating the pipeline of ``InstructTGMM`` is
+```shell
+chmod +x ./run_template.sh  # Before running, remember to set the proper backbone LLM
+./run_instruct_tgmm.sh
+```
+
 ### (Optional) Visualization via pushing to ``wandb``
 
 The following script push all the experiment logs in ``<directory_to_push>`` to a wandb workspace named ``TGMM``. Remember to create this workspace before pushing.

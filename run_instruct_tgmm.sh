@@ -1,6 +1,6 @@
 TGMM_BACKBONE_CKPT=''
 
-torchrun --nproc_per_node=1 \
+torchrun --nproc_per_node=2 \
   run_instruct_hf.py \
   --output_dir ./output \
   --report_to none \
