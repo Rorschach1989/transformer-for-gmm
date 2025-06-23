@@ -1,4 +1,4 @@
-from typing import Optional, Union, Dict
+from typing import Optional, Union, Dict, List
 from dataclasses import dataclass, field
 
 import torch
@@ -13,6 +13,9 @@ from .evaluation import GMMEvaluator
 @dataclass
 class TGMMTrainingArguments(object):
     r"""For holding some loss function balancing options"""
+    tgmm_backbone_ckpt_path: str = field(  # This one is required
+        metadata={"help": "path to a checkpoint of the TGMM backbone"}
+    )
     mean_coefficient: float = field(
         default=1.0,
         metadata={"help": "coefficient for the loss function regarding mean component"}
@@ -24,6 +27,27 @@ class TGMMTrainingArguments(object):
     scale_coefficient: float = field(
         default=1.0,
         metadata={"help": "coefficient for the loss function regarding scale component"}
+    )
+    # Use tgmm prefix to avoid confusions
+    tgmm_task_dim: int = field(
+        default=8,
+        metadata={"help": "dimensionality of the GMM problems"}
+    )
+    tgmm_n_sample: int = field(
+        default=32,
+        metadata={"help": "number of samples in the GMM problems"}
+    )
+    tgmm_batch_size: int = field(
+        default=4,
+        metadata={"help": "batch size for TGMM training"}
+    )
+    tgmm_components: List[int] = field(
+        default=None,
+        metadata={"help": "number of components for TGMM training"},
+    )
+    tgmm_eval_datasize: int = field(
+        default=128,
+        metadata={"help": "number of eval cases in the GMM problems"}
     )
 
 
