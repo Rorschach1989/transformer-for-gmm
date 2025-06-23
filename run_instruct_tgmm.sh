@@ -3,6 +3,7 @@ TGMM_BACKBONE_CKPT=''
 torchrun --nproc_per_node=1 \
   run_instruct_hf.py \
   --output_dir ./output \
+  --report_to none \
   --label_names mixture_probs assignment gaussian_means scale \
   --max_steps 10000 \
   --per_device_train_batch_size 1 \

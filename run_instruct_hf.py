@@ -1,5 +1,4 @@
 import os
-os.environ["WANDB_DISABLED"] = "true"
 from functools import partial
 
 from transformers import TrainingArguments, AutoProcessor, HfArgumentParser
@@ -61,7 +60,7 @@ def main():
         pretrained_ckpt_path=tgmm_args.tgmm_backbone_ckpt_path,
     )
 
-    rank0_log("Freezing backbone and start stage1 training...")
+    rank0_log("Start training...")
 
     tokenizer = AutoProcessor.from_pretrained(tgmm_args.tgmm_backbone_ckpt_path)
 
