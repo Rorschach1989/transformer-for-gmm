@@ -48,7 +48,7 @@ chmod +x ./run_template.sh  # Or edit it to be any configurations of interest
 ### Integrate with (Open-source) large language models (InstructTGMM)
 The ``tgmm`` framework also supports passing input problems via language instructions with a minor tweak on the training procedure. Please refer to [this prompt](tgmm/utils/prompt.py) for our initial design of task instruction. An example script illustrating the pipeline of ``InstructTGMM`` is
 ```shell
-chmod +x ./run_template.sh  # Before running, remember to set the proper backbone LLM
+chmod +x ./run_instruct_tgmm.sh  # Before running, remember to set the proper backbone LLM
 ./run_instruct_tgmm.sh
 ```
 
