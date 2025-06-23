@@ -1,14 +1,17 @@
 import math
-from typing import List, Union
+from typing import List, Union, Dict, Any
 from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
+# For type hint of InstructTGMM tokenization
+from transformers import PreTrainedTokenizerFast
 
 from .utils import (
     _cos,
     sequence_length_to_mask,
 )
+from .utils.prompt import translate_to_prompt
 
 
 class Task(object):
@@ -29,6 +32,13 @@ class IsotropicGaussianMixtureSample(object):
     scale: torch.Tensor
     mask_length: torch.Tensor = None
     mask_components: torch.Tensor = None
+
+    def clone(self):
+        sample_kwargs = {}
+        for k, v in self.__dict__.items():
+            if v is not None:
+                sample_kwargs[k] = v.clone()
+        return self.__class__(**sample_kwargs)
 
     def to(self, device, **kwargs):
         sample_kwargs = {}
@@ -135,6 +145,55 @@ def concat_task_sample(sample_list: List[GaussianMixtureSample]):
         else:
             kwargs[k] = None
     return sample_cls(**kwargs)
+
+
+def concat_task_sample_hf(
+    sample_list: List[Union[GaussianMixtureSample, Dict[str, Any]]]
+):
+    if sample_list and isinstance(sample_list[0], Dict):
+        concat_sample = concat_task_sample(
+            [
+                # TODO: make this more configurable
+                IsotropicGaussianMixtureSample(**sample)
+                for sample in sample_list
+            ]
+        )
+    else:
+        concat_sample = concat_task_sample(sample_list)
+    return concat_sample.__dict__
+
+
+def concat_task_sample_instruct(
+    sample_list: List[Union[GaussianMixtureSample, Dict[str, Any]]],
+    tokenizer: PreTrainedTokenizerFast,
+):
+    concat_sample = concat_task_sample_hf(sample_list)
+    messages = translate_to_prompt(
+        gaussian_means=concat_sample["gaussian_means"],
+        mask_components=concat_sample["mask_components"],
+        mask_length=concat_sample["mask_length"],
+        sample=concat_sample["sample"],
+    )
+    input_ids = tokenizer.apply_chat_template(
+        messages,
+        add_generation_prompt=False,
+        return_tensors="pt",
+    )
+    concat_sample["input_ids"] = input_ids
+    # Adjust input masks
+    mask_length = concat_sample["mask_length"]
+    if mask_length is not None:
+        instruction_mask = torch.ones_like(
+            input_ids,
+            device=mask_length.device,
+            dtype=mask_length.dtype,
+        )
+        mask_length = torch.cat(
+            [instruction_mask, mask_length],
+            dim=1
+        )
+        concat_sample["mask_length"] = mask_length
+    return concat_sample
 
 
 @dataclass
@@ -442,6 +501,7 @@ class MultiTaskGaussianMixtureTask(Task):
 
     def sample(self, n_sample, batch_size, *args, **kwargs):
         sample_list = [
-            task.sample(n_sample, batch_size, *args, **kwargs) for task in self.tasks
+            task.sample(n_sample, batch_size, *args, **kwargs)
+            for task in self.tasks
         ]
         return concat_task_sample(sample_list)

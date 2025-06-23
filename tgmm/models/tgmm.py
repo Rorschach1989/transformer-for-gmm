@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -8,6 +9,10 @@ from transformers import (
     GPT2Config,
     Mamba2Model,
     Mamba2Config,
+)
+# Stuffs related to Qwen3
+from transformers.models.qwen3 import (
+    Qwen3Model
 )
 
 from ..task import (
@@ -85,6 +90,14 @@ class TGMMOutput(object):
     # scale estimation is not necessary for Isotropic tasks
     scale_est: torch.Tensor = None
     scale_loss: torch.Tensor = None
+
+    def to_predictions(self):
+        out_dict = OrderedDict()  # Make sure a canonical unpacking order
+        out_dict["alpha_est"] = self.alpha_est
+        out_dict["mu_est"] = self.mu_est
+        if self.scale_est is not None:
+            out_dict["scale_est"] = self.scale_est
+        return out_dict
 
 
 class TGMMModel(nn.Module):
@@ -173,6 +186,11 @@ class MultiTaskTGMMModel(nn.Module):
                 num_hidden_layers=model_args.get("num_hidden_layers", 12),
             )
             return mamba2_config, Mamba2Model(mamba2_config)
+        elif model_type.startswith("qwen"):
+            pretrained_ckpt_path = model_args.get("pretrained_ckpt_path")
+            qwen_model = Qwen3Model.from_pretrained(pretrained_ckpt_path)
+            # TODO: we shall allow for fine-grained control of parameter tunability
+            return qwen_model.config, qwen_model
         else:
             raise NotImplementedError
 
@@ -182,6 +200,8 @@ class MultiTaskTGMMModel(nn.Module):
             return AttentivePooling(**model_args)
         elif model_type == "mamba2":
             # return _RNNReadout(**model_args)
+            return AttentivePooling(**model_args)
+        elif model_type.startswith("qwen"):
             return AttentivePooling(**model_args)
         else:
             raise NotImplementedError
@@ -202,7 +222,10 @@ class MultiTaskTGMMModel(nn.Module):
         self.subtask_components = self.task.subtask_components
         # Task embedding that embed components
         self.task_embedding = nn.Embedding(self.n_components, n_task_embd)
-        n_embd = kwargs.get("n_embd", 128)
+        if model_type.startswith("qwen"):
+            n_embd = 1024
+        else:
+            n_embd = kwargs.get("n_embd", 128)
         # TODO: maybe enrich the method of injecting task information
         self.read_in = nn.Linear(self.task.dim + n_task_embd, n_embd)
         self.config, self.encoder = self._prepare_backbone(model_type, **kwargs)
@@ -296,3 +319,145 @@ class MultiTaskTGMMModel(nn.Module):
                 scale_loss=scale_loss_val,
                 scale_est=scale_est,
             )
+
+
+class HFMultiTaskTGMMModel(MultiTaskTGMMModel):
+    r"""A dispatching workaround for supporting TGMM
+    in huggingface transformers Trainer"""
+
+    def forward(
+        self,
+        mixture_probs,
+        assignment,
+        gaussian_means,
+        sample,
+        scale,
+        mask_length,
+        mask_components,
+    ):
+        inputs = IsotropicGaussianMixtureSample(
+            mixture_probs=mixture_probs,
+            assignment=assignment,
+            gaussian_means=gaussian_means,
+            sample=sample,
+            scale=scale,
+            mask_length=mask_length,
+            mask_components=mask_components,
+        )
+        return super(HFMultiTaskTGMMModel, self).forward(inputs)
+
+
+class MultiTaskInstructTGMMModel(nn.Module):
+    r"""Augmenting TGMM using LLM backbones via incorporating instructions
+    TODO: Current impl considers only isotropic, maybe enrich later"""
+
+    @staticmethod
+    def _prepare_backbone(pretrained_ckpt_path):
+        # TODO: enable more pretrained models
+        model = Qwen3Model.from_pretrained(pretrained_ckpt_path)
+        return model
+
+    def _map_component_ids(self, component_ids: torch.Tensor):
+        return torch.stack(
+            [
+                i * (component_ids == n_components - 1).long()
+                for i, n_components in enumerate(self.subtask_components)
+            ],
+            dim=1,
+        ).sum(dim=1)
+
+    def __init__(
+        self,
+        task,
+        pretrained_ckpt_path,
+        ignore_text_embeddings=True,
+    ):
+        super(MultiTaskInstructTGMMModel, self).__init__()
+        self.task = task
+        self.n_components = self.task.max_n_components
+        self.n_subtasks = self.task.n_subtasks
+        self.subtask_components = self.task.subtask_components
+        self.encoder = self._prepare_backbone(pretrained_ckpt_path)
+        self.hidden_size = self.encoder.config.hidden_size
+        self.data_projector = nn.Linear(
+            self.task.dim,
+            self.hidden_size,
+        )
+        self.read_outs = nn.ModuleList()
+        d_out = self.n_components + self.task.dim
+        for i in range(self.n_subtasks):
+            self.read_outs.append(
+                AttentivePooling(
+                    d_in=self.hidden_size,
+                    d_out=d_out,
+                    n_out=self.n_components,
+                )
+            )
+        # Loss functions
+        self.alpha_loss = nn.CrossEntropyLoss()
+        self.mu_loss = nn.MSELoss(reduction="none")
+        self.ignore_text_embeddings = ignore_text_embeddings
+
+    def freeze_backbone(self):
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+
+    def unfreeze_backbone(self):
+        for param in self.encoder.parameters():
+            param.requires_grad = True
+
+    def forward(
+        self,
+        input_ids,
+        mixture_probs,
+        assignment,
+        gaussian_means,
+        sample,
+        scale,
+        mask_length,
+        mask_components,
+    ):
+        # Embed inputs
+        instruction_embeds = self.encoder.embed_tokens(input_ids)
+        # We do not need task embeddings anymore
+        # as they are handled in the instructions
+        data_embeds = self.data_projector(sample)
+        input_embeds = torch.cat(
+            [instruction_embeds, data_embeds],
+            dim=1
+        )
+        component_ids = mask_components.sum(dim=1).long() - 1
+        h = self.encoder(
+            inputs_embeds=input_embeds,
+            attention_mask=mask_length,
+        ).last_hidden_state
+        if self.ignore_text_embeddings:
+            batch_size, n_sample, n_dim = sample.size()
+            h = h[:, -n_sample:, :]
+            if mask_length is not None:
+                mask_length = mask_length[:, -n_sample:]
+        out_combn = torch.stack(
+            [read_out(h, mask=mask_length) for read_out in self.read_outs], dim=1
+        )
+        results = torch.gather(
+            out_combn,
+            1,
+            self._map_component_ids(component_ids)
+            .view(-1, 1, 1, 1)
+            .expand(-1, -1, out_combn.size(2), out_combn.size(3)),
+        ).squeeze(dim=1)
+        alpha_est = results[:, :, : self.n_components].mean(dim=1)
+        mu_est = results[:, :, self.n_components:]
+        alpha_est = alpha_est - (1.0 - mask_components) * 1e9
+        alpha_loss_val = self.alpha_loss(alpha_est, mixture_probs)
+        mu_loss_val_ = self.mu_loss(mu_est, gaussian_means)  # [b, n, d]
+        mask = mask_components
+        mu_loss_sum_ = (mu_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
+        mu_loss_val = (mu_loss_sum_ / mask.sum(dim=1)).mean()
+        return TGMMOutput(
+            alpha_loss=alpha_loss_val,
+            mu_loss=mu_loss_val,
+            alpha_est=alpha_est,
+            mu_est=mu_est,
+            h=h,
+        )
