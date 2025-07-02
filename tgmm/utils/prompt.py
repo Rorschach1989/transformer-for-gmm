@@ -18,7 +18,9 @@ You will output the estimates of mixture probabilities and the means of each GMM
 - dimension: {n_dim}
 - number of GMM components: {n_component}
 - number of input GMM samples: {n_sample}
-""".format(**kwargs)
+""".format(
+        **kwargs
+    )
     return [
         {
             "role": "system",
@@ -27,7 +29,7 @@ You will output the estimates of mixture probabilities and the means of each GMM
         {
             "role": "user",
             "content": user_prompt,
-        }
+        },
     ]
 
 
@@ -51,7 +53,5 @@ def translate_to_prompt(
             "n_component": n_component,
             "n_sample": n_sample,
         }
-        batch_messages.append(
-            _get_prompt_v1(**kwargs)
-        )
+        batch_messages.append(_get_prompt_v1(**kwargs))
     return batch_messages

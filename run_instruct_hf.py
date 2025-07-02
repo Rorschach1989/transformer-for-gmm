@@ -41,10 +41,7 @@ def main():
     rank0_log("Start constructing Tasks...")
 
     task_list = [
-        IsotropicGaussianMixtureTask(
-            n_components=n,
-            dim=tgmm_args.tgmm_task_dim
-        )
+        IsotropicGaussianMixtureTask(n_components=n, dim=tgmm_args.tgmm_task_dim)
         for n in tgmm_args.tgmm_components
     ]
     task = MultiTaskGaussianMixtureTask(task_list)

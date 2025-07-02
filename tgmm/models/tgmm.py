@@ -10,10 +10,9 @@ from transformers import (
     Mamba2Model,
     Mamba2Config,
 )
+
 # Stuffs related to Qwen3
-from transformers.models.qwen3 import (
-    Qwen3Model
-)
+from transformers.models.qwen3 import Qwen3Model
 
 from ..task import (
     IsotropicGaussianMixtureSample,
@@ -231,7 +230,11 @@ class MultiTaskTGMMModel(nn.Module):
         self.config, self.encoder = self._prepare_backbone(model_type, **kwargs)
         d_out = self.n_components + self.task.dim * (1 if self.is_isotropic else 2)
         self.read_outs = nn.ModuleList()
-        readout_model_args = {"d_in": n_embd, "d_out": d_out, "n_out": self.n_components}
+        readout_model_args = {
+            "d_in": n_embd,
+            "d_out": d_out,
+            "n_out": self.n_components,
+        }
         for i in range(self.n_subtasks):
             self.read_outs.append(
                 self._prepare_readout(model_type, **readout_model_args)
@@ -422,10 +425,7 @@ class MultiTaskInstructTGMMModel(nn.Module):
         # We do not need task embeddings anymore
         # as they are handled in the instructions
         data_embeds = self.data_projector(sample)
-        input_embeds = torch.cat(
-            [instruction_embeds, data_embeds],
-            dim=1
-        )
+        input_embeds = torch.cat([instruction_embeds, data_embeds], dim=1)
         component_ids = mask_components.sum(dim=1).long() - 1
         h = self.encoder(
             inputs_embeds=input_embeds,
@@ -447,7 +447,7 @@ class MultiTaskInstructTGMMModel(nn.Module):
             .expand(-1, -1, out_combn.size(2), out_combn.size(3)),
         ).squeeze(dim=1)
         alpha_est = results[:, :, : self.n_components].mean(dim=1)
-        mu_est = results[:, :, self.n_components:]
+        mu_est = results[:, :, self.n_components :]
         alpha_est = alpha_est - (1.0 - mask_components) * 1e9
         alpha_loss_val = self.alpha_loss(alpha_est, mixture_probs)
         mu_loss_val_ = self.mu_loss(mu_est, gaussian_means)  # [b, n, d]

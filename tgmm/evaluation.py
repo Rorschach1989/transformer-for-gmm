@@ -111,8 +111,7 @@ class GMMEvaluationResult:
 
     def _maybe_filter_abnormal_likelihoods(self, threshold: float = -100.0):
         all_tensor_check = all(
-            isinstance(item, torch.Tensor)
-            for item in self.__dict__.values()
+            isinstance(item, torch.Tensor) for item in self.__dict__.values()
         )
         if all_tensor_check:
             valid_indices = self.log_likelihood > threshold
@@ -201,8 +200,10 @@ class GMMEvaluator(object):
             (self.ground_truth.mixture_probs - alpha_est).square().mean(dim=-1)
         )
         l2_error_scale = (
-            (self.ground_truth.scale - scale_est).square().mean(dim=-1)
-        ) if scale_est is not None else torch.zeros_like(l2_error_means)
+            ((self.ground_truth.scale - scale_est).square().mean(dim=-1))
+            if scale_est is not None
+            else torch.zeros_like(l2_error_means)
+        )
         if in_sample_eval:
             X = self.ground_truth.sample
             true_assignments = self.ground_truth.assignment

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
+
 # For type hint of InstructTGMM tokenization
 from transformers import PreTrainedTokenizerFast
 
@@ -161,7 +162,7 @@ def concat_task_sample(sample_list: List[GaussianMixtureSample]):
 
 
 def concat_task_sample_hf(
-    sample_list: List[Union[GaussianMixtureSample, Dict[str, Any]]]
+    sample_list: List[Union[GaussianMixtureSample, Dict[str, Any]]],
 ):
     if sample_list and isinstance(sample_list[0], Dict):
         concat_sample = concat_task_sample(
@@ -201,10 +202,7 @@ def concat_task_sample_instruct(
             device=mask_length.device,
             dtype=mask_length.dtype,
         )
-        mask_length = torch.cat(
-            [instruction_mask, mask_length],
-            dim=1
-        )
+        mask_length = torch.cat([instruction_mask, mask_length], dim=1)
         concat_sample["mask_length"] = mask_length
     return concat_sample
 
@@ -402,9 +400,11 @@ class OODIsotropicGaussianMixtureTask(IsotropicGaussianMixtureTask):
             gaussian_means = (
                 torch.rand(_batch_size, self.dim, self.n_components) - 0.5
             ) * 10
-            gaussian_means = gaussian_means + torch.randn_like(
-                gaussian_means, device=gaussian_means.device
-            ) * self.perturbation_scale
+            gaussian_means = (
+                gaussian_means
+                + torch.randn_like(gaussian_means, device=gaussian_means.device)
+                * self.perturbation_scale
+            )
             self_sim = -_cos(
                 gaussian_means.permute(0, 2, 1), gaussian_means.permute(0, 2, 1)
             )
@@ -514,7 +514,6 @@ class MultiTaskGaussianMixtureTask(Task):
 
     def sample(self, n_sample, batch_size, *args, **kwargs):
         sample_list = [
-            task.sample(n_sample, batch_size, *args, **kwargs)
-            for task in self.tasks
+            task.sample(n_sample, batch_size, *args, **kwargs) for task in self.tasks
         ]
         return concat_task_sample(sample_list)

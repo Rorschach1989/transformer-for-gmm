@@ -13,62 +13,68 @@ from .evaluation import GMMEvaluator
 @dataclass
 class TGMMTrainingArguments(object):
     r"""For holding some loss function balancing options"""
+
     tgmm_backbone_ckpt_path: str = field(  # This one is required
         metadata={"help": "path to a checkpoint of the TGMM backbone"}
     )
     mean_coefficient: float = field(
         default=1.0,
-        metadata={"help": "coefficient for the loss function regarding mean component"}
+        metadata={"help": "coefficient for the loss function regarding mean component"},
     )
     prob_coefficient: float = field(
         default=1.0,
-        metadata={"help": "coefficient for the loss function regarding probability component"}
+        metadata={
+            "help": "coefficient for the loss function regarding probability component"
+        },
     )
     scale_coefficient: float = field(
         default=1.0,
-        metadata={"help": "coefficient for the loss function regarding scale component"}
+        metadata={
+            "help": "coefficient for the loss function regarding scale component"
+        },
     )
     # Use tgmm prefix to avoid confusions
     tgmm_task_dim: int = field(
-        default=8,
-        metadata={"help": "dimensionality of the GMM problems"}
+        default=8, metadata={"help": "dimensionality of the GMM problems"}
     )
     tgmm_n_sample: int = field(
-        default=32,
-        metadata={"help": "number of samples in the GMM problems"}
+        default=32, metadata={"help": "number of samples in the GMM problems"}
     )
     tgmm_batch_size: int = field(
-        default=4,
-        metadata={"help": "batch size for TGMM training"}
+        default=4, metadata={"help": "batch size for TGMM training"}
     )
     tgmm_components: List[int] = field(
         default=None,
         metadata={"help": "number of components for TGMM training"},
     )
     tgmm_eval_datasize: int = field(
-        default=128,
-        metadata={"help": "number of eval cases in the GMM problems"}
+        default=128, metadata={"help": "number of eval cases in the GMM problems"}
     )
     tgmm_eval_static_datapath: str = field(
-        default=None,
-        metadata={"help": "path to the static data file"}
+        default=None, metadata={"help": "path to the static data file"}
     )
 
 
 class TGMMHFTrainer(Trainer):
     r"""Customized Trainer for Huggingface-models-backbone training of TGMM."""
 
-    def __init__(self, *args, tgmm_training_args: TGMMTrainingArguments, **kwargs) -> None:
+    def __init__(
+        self, *args, tgmm_training_args: TGMMTrainingArguments, **kwargs
+    ) -> None:
         super(TGMMHFTrainer, self).__init__(*args, **kwargs)
         self.tgmm_training_args = tgmm_training_args
         self.tgmm_task_evaluators = {}
 
-    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+    def compute_loss(
+        self, model, inputs, return_outputs=False, num_items_in_batch=None
+    ):
         r""""""
         # inputs = IsotropicGaussianMixtureSample(**inputs)
         outputs: TGMMOutput = model(**inputs)
-        loss = outputs.mu_loss * self.tgmm_training_args.mean_coefficient + \
-            outputs.alpha_loss * self.tgmm_training_args.prob_coefficient
+        loss = (
+            outputs.mu_loss * self.tgmm_training_args.mean_coefficient
+            + outputs.alpha_loss * self.tgmm_training_args.prob_coefficient
+        )
         if outputs.scale_loss is not None:
             loss += outputs.scale_loss * self.tgmm_training_args.scale_coefficient
         return (loss, outputs.to_predictions()) if return_outputs else loss
@@ -112,7 +118,9 @@ class TGMMHFTrainer(Trainer):
             elif len(output.predictions) == 3:
                 alpha_est, mu_est, scale_est = output.predictions
             else:
-                raise ValueError(f"Not supported prediction shape {len(output.predictions)}")
+                raise ValueError(
+                    f"Not supported prediction shape {len(output.predictions)}"
+                )
             alpha_est = torch.from_numpy(alpha_est[:, : subtask.n_components])
             mu_est = torch.from_numpy(mu_est[:, : subtask.n_components, :])
             if scale_est is not None:
@@ -120,15 +128,13 @@ class TGMMHFTrainer(Trainer):
             eval_results_tgmm = evaluator(
                 mu_est=mu_est.cpu(),
                 alpha_est=F.softmax(alpha_est.cpu(), dim=-1),
-                scale_est=(
-                    scale_est.cpu()
-                    if scale_est is not None
-                    else None
-                ),
+                scale_est=(scale_est.cpu() if scale_est is not None else None),
                 in_sample_eval=True,
             )
             metrics = eval_results_tgmm.summary_for_wandb()
             all_metrics_dict[f"K={task_name}"] = metrics
         self.log(all_metrics_dict)
-        self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, all_metrics_dict)
+        self.control = self.callback_handler.on_evaluate(
+            self.args, self.state, self.control, all_metrics_dict
+        )
         return all_metrics_dict

@@ -97,8 +97,7 @@ class StaticGaussianMixtureDataset(Dataset):
         for key, value in self.__dict__.items():
             if key in exc_keys:
                 continue
-            output[key] = value[idx, ...].unsqueeze(0)\
-                if value is not None else None
+            output[key] = value[idx, ...].unsqueeze(0) if value is not None else None
         return output
 
     @property
@@ -138,17 +137,12 @@ def check_or_create_static_dataset(dataset_path, seed=7777777):
     n_sample = conf.get("n_sample", 32)
     dataset_size = conf.get("dataset_size", 128)
     seed_everything(seed)
-    task_list = [
-        IsotropicGaussianMixtureTask(n_components=n, dim=d)
-        for n in ks
-    ]
+    task_list = [IsotropicGaussianMixtureTask(n_components=n, dim=d) for n in ks]
     dataset_dict = {}
     for task in task_list:
         dataset_name = f"{task.n_components}_{n_sample}"
         dataset_dict[dataset_name] = StaticGaussianMixtureDataset(
-            n_sample=n_sample,
-            task=task,
-            dataset_size=dataset_size
+            n_sample=n_sample, task=task, dataset_size=dataset_size
         ).to_dict()
     with open(dataset_path, "w") as f:
         json.dump(dataset_dict, f, indent=4)

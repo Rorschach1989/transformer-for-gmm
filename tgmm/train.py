@@ -18,12 +18,11 @@ from .task import (
     SphericalGaussianMixtureTask,
     MultiTaskGaussianMixtureTask,
     concat_task_sample,
-    GaussianMixtureTask,
 )
 from .dataset import (
     GaussianMixtureDataset,
     StaticGaussianMixtureDataset,
-    check_or_create_static_dataset
+    check_or_create_static_dataset,
 )
 from .utils import seed_everything, get_device, StreamingLossMeter
 
@@ -113,7 +112,9 @@ class EvaluationHelper(object):
         self.cfg = cfg
         self.task = task
         self.n_samples = (
-            [cfg.eval.n_sample] if isinstance(cfg.eval.n_sample, int) else cfg.eval.n_sample
+            [cfg.eval.n_sample]
+            if isinstance(cfg.eval.n_sample, int)
+            else cfg.eval.n_sample
         )
         self.max_n_components = self.task.max_n_components
         self.device = device
@@ -150,8 +151,7 @@ class EvaluationHelper(object):
                 for dataset_name, dataset in datasets.items():
                     assert dataset_name in self._dataset_dict
                     self._dataset_dict[dataset_name].load_from(
-                        dataset,
-                        device=self.device
+                        dataset, device=self.device
                     )
 
     def _init_static_evaluators(self):
@@ -169,11 +169,17 @@ class EvaluationHelper(object):
 
     def _get_static_task_sample_and_evaluator(self, subtask, n_sample, dataset_size):
         dataset_name = self._get_dataset_name(subtask, n_sample)
-        task_sample = self._dataset_dict[dataset_name]._sample  # No need to call __getitem__
+        task_sample = self._dataset_dict[
+            dataset_name
+        ]._sample  # No need to call __getitem__
         evaluator = self._evaluator_dict[dataset_name]
         return task_sample, evaluator
 
     def _get_dynamic_task_sample_and_evaluator(self, subtask, n_sample, dataset_size):
+        if self.cfg.eval.ood_perturbation_scale > 0.0:
+            subtask = OODIsotropicGaussianMixtureTask.from_id_task(
+                subtask, perturbation_scale=self.cfg.eval.ood_perturbation_scale
+            )
         task_sample = subtask.sample(
             n_sample=n_sample,
             batch_size=dataset_size,
@@ -186,15 +192,11 @@ class EvaluationHelper(object):
     def _get_task_sample_and_evaluator(self, subtask, n_sample, dataset_size):
         if self.eval_strategy == "static":
             return self._get_static_task_sample_and_evaluator(
-                subtask,
-                n_sample,
-                dataset_size
+                subtask, n_sample, dataset_size
             )
         else:
             return self._get_dynamic_task_sample_and_evaluator(
-                subtask,
-                n_sample,
-                dataset_size
+                subtask, n_sample, dataset_size
             )
 
     def _get_baseline_evaluation(
@@ -261,9 +263,7 @@ class EvaluationHelper(object):
         prefix = self._get_prefix(subtask, n_sample)
         with torch.no_grad():
             task_sample, evaluator = self._get_task_sample_and_evaluator(
-                subtask,
-                n_sample,
-                dataset_size
+                subtask, n_sample, dataset_size
             )
             task_sample.pad(self.max_n_components)
             model_output = model(task_sample)
@@ -271,7 +271,9 @@ class EvaluationHelper(object):
             model_output.alpha_est = model_output.alpha_est[:, : subtask.n_components]
             model_output.mu_est = model_output.mu_est[:, : subtask.n_components, :]
             if model_output.scale_est is not None:
-                model_output.scale_est = model_output.scale_est[:, : subtask.n_components, :]
+                model_output.scale_est = model_output.scale_est[
+                    :, : subtask.n_components, :
+                ]
             eval_results_tgmm = evaluator(
                 mu_est=model_output.mu_est.cpu(),
                 alpha_est=F.softmax(model_output.alpha_est.cpu(), dim=-1),
@@ -335,133 +337,6 @@ class EvaluationHelper(object):
         return summary_dict
 
 
-def evaluate(
-    task: MultiTaskGaussianMixtureTask,
-    model: Union[TGMMModel, MultiTaskTGMMModel],
-    device,
-    loss_meter: StreamingLossMeter,
-    cfg,
-    step,
-):
-
-    model.eval()
-    summary_dict = {}
-
-    def _eval(
-        subtask: Union[GaussianMixtureTask],
-        eval_n_sample,
-    ):
-        if cfg.task.type == "PhaseTransitionGaussianMixture":
-            prefix = f"a_{subtask.a:.4f}-b_{subtask.b:.4f}"
-        else:
-            prefix = f"K_{subtask.n_components}-N_{eval_n_sample}"
-        with torch.no_grad():
-            if cfg.eval.ood_perturbation_scale > 0.0:
-                subtask = OODIsotropicGaussianMixtureTask.from_id_task(
-                    subtask, perturbation_scale=cfg.eval.ood_perturbation_scale
-                )
-            task_sample = subtask.sample(
-                n_sample=eval_n_sample,
-                batch_size=cfg.eval.batch_size,
-                gen_mask=False,
-            ).to(device)
-            task_sample_for_eval = task_sample.to("cpu")
-            task_sample.pad(task.max_n_components)
-            evaluator = GMMEvaluator(task=subtask, ground_truth=task_sample_for_eval)
-            model_output = model(task_sample)
-            # Adjust mask manually
-            model_output.alpha_est = model_output.alpha_est[:, : subtask.n_components]
-            model_output.mu_est = model_output.mu_est[:, : subtask.n_components, :]
-            if model_output.scale_est is not None:
-                model_output.scale_est = model_output.scale_est[
-                    :, : subtask.n_components, :
-                ]
-            eval_results_tgmm = evaluator(
-                mu_est=model_output.mu_est.cpu(),
-                alpha_est=F.softmax(model_output.alpha_est.cpu(), dim=-1),
-                scale_est=(
-                    model_output.scale_est.cpu()
-                    if model_output.scale_est is not None
-                    else None
-                ),
-                in_sample_eval=True,
-            )
-            alpha_loss, mu_loss, scale_loss, total_loss = loss_meter.compute()
-            summary = {
-                "step": step,
-                f"{prefix}.tgmm_summary": eval_results_tgmm.summary_for_wandb(),
-                # Some auxiliary metrics
-                f"{prefix}.alpha_loss": (
-                    alpha_loss.cpu().item() if alpha_loss is not None else None
-                ),
-                f"{prefix}.mu_loss": (
-                    mu_loss.cpu().item() if mu_loss is not None else None
-                ),
-                f"{prefix}.scale_loss": (
-                    scale_loss.cpu().item() if scale_loss is not None else None
-                ),
-                f"{prefix}.total_loss": (
-                    total_loss.cpu().item() if total_loss is not None else None
-                ),
-            }
-            if cfg.task.type != "PhaseTransitionGaussianMixture":
-                gmm_em = GaussianMixtureEM(
-                    n_components=subtask.n_components,
-                    n_features=subtask.dim,
-                    verbose=cfg.train.verbose,
-                    learnable_covariance=bool(
-                        cfg.task.type == "MultiTaskAnisotropicGaussianMixture"
-                    ),
-                )
-                gmm_spectral = GaussianMixtureSpectral(
-                    n_components=subtask.n_components,
-                    verbose=cfg.train.verbose,
-                    # n_repeat=100,
-                    # n_iteration=20,
-                )
-                alpha_est_em, mu_est_em, scale_est, iter_em = gmm_em.fit_batch(
-                    task_sample.sample.cpu()
-                )
-                alpha_est_spectral, mu_est_spectral, _ = gmm_spectral.fit_batch(
-                    task_sample.sample.cpu()
-                )
-                eval_results_em = evaluator(
-                    mu_est=mu_est_em,
-                    alpha_est=alpha_est_em,
-                    scale_est=(
-                        scale_est
-                        if cfg.task.type == "MultiTaskAnisotropicGaussianMixture"
-                        else None
-                    ),
-                    in_sample_eval=True,
-                )
-                eval_results_spectral = evaluator(
-                    mu_est=mu_est_spectral,
-                    alpha_est=alpha_est_spectral,
-                    in_sample_eval=True,
-                )
-                mean_iter_em = iter_em.mean().item()
-                baseline_summary = {
-                    "step": step,
-                    f"{prefix}.em_summary": eval_results_em.summary_for_wandb(),
-                    f"{prefix}.spectral_summary": eval_results_spectral.summary_for_wandb(),
-                    # Some auxiliary metrics
-                    f"{prefix}.em_iter": mean_iter_em,
-                }
-                summary.update(baseline_summary)
-        return summary
-
-    # For legacy compatibility
-    n_samples = (
-        [cfg.eval.n_sample] if isinstance(cfg.eval.n_sample, int) else cfg.eval.n_sample
-    )
-    for subtask in task.tasks:
-        for n in n_samples:
-            summary_dict.update(_eval(subtask, n))
-    model.train()
-    return summary_dict
-
-
 def train(cfg, device_id, name: str = None):
     r"""Training pipeline"""
     device = get_device(device_id)
@@ -500,7 +375,6 @@ def train(cfg, device_id, name: str = None):
     for step in pbar:
         if not step % cfg.train.eval_every:
             eval_results.append(evaluation_helper.evaluate(model, loss_meter, step))
-            # eval_results.append(evaluate(task, model, device, loss_meter, cfg, step))
         task_sample = next(it).to(device=device, non_blocking=True)
         optimizer.zero_grad()
         model_output = model(task_sample)
