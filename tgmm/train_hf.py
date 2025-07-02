@@ -49,6 +49,10 @@ class TGMMTrainingArguments(object):
         default=128,
         metadata={"help": "number of eval cases in the GMM problems"}
     )
+    tgmm_eval_static_datapath: str = field(
+        default=None,
+        metadata={"help": "path to the static data file"}
+    )
 
 
 class TGMMHFTrainer(Trainer):

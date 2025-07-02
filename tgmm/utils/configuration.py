@@ -70,6 +70,10 @@ def setup_cfg(**kwargs):
     cfg.eval.n_sample = [int(n) for n in eval_n_sample]
     cfg.eval.batch_size = kwargs.get("eval_batch_size", 128)
     cfg.eval.ood_perturbation_scale = kwargs.get("ood_perturbation_scale", 0.0)
+    # The following options are currently only used for comparisons between
+    # TGMM and InstructTGMM
+    cfg.eval.strategy = kwargs.get("eval_strategy", "dynamic")
+    cfg.eval.static_dataset_path = kwargs.get("static_dataset_path", None)
     return cfg
 
 

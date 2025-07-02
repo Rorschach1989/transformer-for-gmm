@@ -28,3 +28,5 @@ eval:
   - 128
   batch_size: 128
   ood_perturbation_scale: 0.0
+  strategy: dynamic
+  static_dataset_path: null

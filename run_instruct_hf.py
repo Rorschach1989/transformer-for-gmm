@@ -1,9 +1,15 @@
 import os
+import json
 from functools import partial
 
+import torch
 from transformers import TrainingArguments, AutoProcessor, HfArgumentParser
 
-from tgmm.dataset import GaussianMixtureDataset, StaticGaussianMixtureDataset
+from tgmm.dataset import (
+    GaussianMixtureDataset,
+    StaticGaussianMixtureDataset,
+    check_or_create_static_dataset,
+)
 from tgmm.models.tgmm import MultiTaskInstructTGMMModel
 from tgmm.task import (
     IsotropicGaussianMixtureTask,
@@ -42,19 +48,32 @@ def main():
         for n in tgmm_args.tgmm_components
     ]
     task = MultiTaskGaussianMixtureTask(task_list)
+    n_sample = tgmm_args.tgmm_n_sample
     train_dataset = GaussianMixtureDataset(
         task=task,
         batch_size=tgmm_args.tgmm_batch_size,
-        n_sample=tgmm_args.tgmm_n_sample,
+        n_sample=n_sample,
     )
     eval_dataset = {
-        t.n_components: StaticGaussianMixtureDataset(
+        f"{t.n_components}_{n_sample}": StaticGaussianMixtureDataset(
             dataset_size=tgmm_args.tgmm_eval_datasize,
             task=t,
-            n_sample=tgmm_args.tgmm_n_sample,
+            n_sample=n_sample,
         )
         for t in task_list
     }
+    static_datapath = os.path.abspath(tgmm_args.tgmm_eval_static_datapath)
+    if static_datapath is not None:
+        check_or_create_static_dataset(static_datapath)
+        # mirror logic from ``maybe_load_from_external``
+        with open(static_datapath, "r") as f:
+            datasets = json.load(f)
+            for dataset_name, dataset in datasets.items():
+                assert dataset_name in eval_dataset
+                eval_dataset[dataset_name].load_from(
+                    dataset,
+                    device=torch.device("cpu"),
+                )
     model = MultiTaskInstructTGMMModel(
         task=task,
         pretrained_ckpt_path=tgmm_args.tgmm_backbone_ckpt_path,
