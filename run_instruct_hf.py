@@ -46,16 +46,19 @@ def main():
     ]
     task = MultiTaskGaussianMixtureTask(task_list)
     n_sample = tgmm_args.tgmm_n_sample
+    padding_side = tgmm_args.tgmm_padding_side
     train_dataset = GaussianMixtureDataset(
         task=task,
         batch_size=tgmm_args.tgmm_batch_size,
         n_sample=n_sample,
+        padding_side=padding_side,
     )
     eval_dataset = {
         f"{t.n_components}_{n_sample}": StaticGaussianMixtureDataset(
             dataset_size=tgmm_args.tgmm_eval_datasize,
             task=t,
             n_sample=n_sample,
+            padding_side=padding_side,
         )
         for t in task_list
     }

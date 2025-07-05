@@ -19,6 +19,7 @@ class _TaskIterator(object):
     batch_size: int
     task: Task
     n_sample: int
+    padding_side: str
 
     def __iter__(self):
         return self
@@ -27,6 +28,7 @@ class _TaskIterator(object):
         return self.task.sample(
             n_sample=self.n_sample,
             batch_size=self.batch_size,
+            padding_side=self.padding_side,
         )
 
 
@@ -37,9 +39,15 @@ class GaussianMixtureDataset(IterableDataset):
     batch_size: int
     task: Task
     n_sample: int
+    padding_side: str = "right"
 
     def __iter__(self):
-        return _TaskIterator(self.batch_size, self.task, self.n_sample)
+        return _TaskIterator(
+            self.batch_size,
+            self.task,
+            self.n_sample,
+            self.padding_side
+        )
 
 
 @dataclass
@@ -50,6 +58,7 @@ class StaticGaussianMixtureDataset(Dataset):
     dataset_size: int
     task: IsotropicGaussianMixtureTask
     n_sample: int
+    padding_side: str = "right"
 
     def __post_init__(self):
         super(Dataset, self).__init__()
@@ -58,6 +67,7 @@ class StaticGaussianMixtureDataset(Dataset):
             n_sample=self.n_sample,
             batch_size=self.dataset_size,
             gen_mask=False,
+            padding_side=self.padding_side,
         )
         self._sample = sample
         self._sample_raw = sample.clone()

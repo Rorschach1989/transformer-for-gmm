@@ -53,6 +53,9 @@ class TGMMTrainingArguments(object):
     tgmm_eval_static_datapath: str = field(
         default=None, metadata={"help": "path to the static data file"}
     )
+    tgmm_padding_side: str = field(
+        default="left", metadata={"help": "the padding side for left/right"}
+    )
 
 
 class TGMMHFTrainer(Trainer):

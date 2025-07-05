@@ -64,9 +64,36 @@ def get_device_count():
         return 1
 
 
-# Implemented by Gemini 2.0 Flash thinking
-def sequence_length_to_mask(sequence_lengths, max_len=None, dtype=torch.bool):
+# Implemented by Gemini 2.0 Flash thinking and Gemini 2.5 pro
+def right_to_left_padded_mask(right_padded_mask):
+    r"""
+    Converts a right-padded boolean mask to a left-padded boolean mask
+    efficiently using torch.roll.
+
+    Args:
+        right_padded_mask (torch.Tensor): A 2D boolean tensor of shape
+                                           (batch_size, seq_len) where True
+                                           indicates a valid token and False
+                                           indicates a padded token, with
+                                           padding on the right.
+
+    Returns:
+        torch.Tensor: A 2D boolean tensor of the same shape with padding on the left.
     """
+    # 1. Calculate the number of padded elements in each sequence
+    num_padded = (~right_padded_mask).sum(dim=1).long()
+
+    # 2. Roll each sequence to the right by the number of padded elements
+    left_padded_mask = torch.stack([
+        torch.roll(right_padded_mask[i], shifts=int(num_padded[i]))
+        for i in range(right_padded_mask.size(0))
+    ])
+
+    return left_padded_mask
+
+
+def sequence_length_to_mask(sequence_lengths, max_len=None, dtype=torch.bool, padding_side="right"):
+    r"""
     Converts a tensor of sequence lengths into a mask tensor.
 
     This function takes a 1D tensor of sequence lengths and generates a 2D mask tensor
@@ -82,6 +109,7 @@ def sequence_length_to_mask(sequence_lengths, max_len=None, dtype=torch.bool):
         dtype (torch.dtype, optional): The desired data type of the mask tensor.
                                       Defaults to torch.bool. You can also use torch.uint8
                                       for integer masks (0 and 1).
+        padding_side (str, optional): The side of the padding. Defaults to "right".
 
     Returns:
         torch.Tensor: A 2D mask tensor of shape (batch_size, max_len) and dtype `dtype`.
@@ -124,4 +152,7 @@ def sequence_length_to_mask(sequence_lengths, max_len=None, dtype=torch.bool):
 
     mask = row_indices < col_indices  # Broadcasting comparison
 
-    return mask.to(dtype=dtype)
+    mask = mask.to(dtype=dtype)
+    if padding_side == "left":
+        mask = right_to_left_padded_mask(mask)
+    return mask

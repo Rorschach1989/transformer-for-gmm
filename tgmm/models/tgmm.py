@@ -420,40 +420,41 @@ class MultiTaskInstructTGMMModel(nn.Module):
         mask_length,
         mask_components,
     ):
-        # Embed inputs
-        instruction_embeds = self.encoder.embed_tokens(input_ids)
-        # We do not need task embeddings anymore
-        # as they are handled in the instructions
-        data_embeds = self.data_projector(sample)
-        input_embeds = torch.cat([instruction_embeds, data_embeds], dim=1)
-        component_ids = mask_components.sum(dim=1).long() - 1
-        h = self.encoder(
-            inputs_embeds=input_embeds,
-            attention_mask=mask_length,
-        ).last_hidden_state
-        if self.ignore_text_embeddings:
-            batch_size, n_sample, n_dim = sample.size()
-            h = h[:, -n_sample:, :]
-            if mask_length is not None:
-                mask_length = mask_length[:, -n_sample:]
-        out_combn = torch.stack(
-            [read_out(h, mask=mask_length) for read_out in self.read_outs], dim=1
-        )
-        results = torch.gather(
-            out_combn,
-            1,
-            self._map_component_ids(component_ids)
-            .view(-1, 1, 1, 1)
-            .expand(-1, -1, out_combn.size(2), out_combn.size(3)),
-        ).squeeze(dim=1)
-        alpha_est = results[:, :, : self.n_components].mean(dim=1)
-        mu_est = results[:, :, self.n_components :]
-        alpha_est = alpha_est - (1.0 - mask_components) * 1e9
-        alpha_loss_val = self.alpha_loss(alpha_est, mixture_probs)
-        mu_loss_val_ = self.mu_loss(mu_est, gaussian_means)  # [b, n, d]
-        mask = mask_components
-        mu_loss_sum_ = (mu_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
-        mu_loss_val = (mu_loss_sum_ / mask.sum(dim=1)).mean()
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            # Embed inputs
+            instruction_embeds = self.encoder.embed_tokens(input_ids)
+            # We do not need task embeddings anymore
+            # as they are handled in the instructions
+            data_embeds = self.data_projector(sample)
+            input_embeds = torch.cat([instruction_embeds, data_embeds], dim=1)
+            component_ids = mask_components.sum(dim=1).long() - 1
+            h = self.encoder(
+                inputs_embeds=input_embeds,
+                attention_mask=mask_length,
+            ).last_hidden_state
+            if self.ignore_text_embeddings:
+                batch_size, n_sample, n_dim = sample.size()
+                h = h[:, -n_sample:, :]
+                if mask_length is not None:
+                    mask_length = mask_length[:, -n_sample:]
+            out_combn = torch.stack(
+                [read_out(h, mask=mask_length) for read_out in self.read_outs], dim=1
+            )
+            results = torch.gather(
+                out_combn,
+                1,
+                self._map_component_ids(component_ids)
+                .view(-1, 1, 1, 1)
+                .expand(-1, -1, out_combn.size(2), out_combn.size(3)),
+            ).squeeze(dim=1)
+            alpha_est = results[:, :, : self.n_components].mean(dim=1)
+            mu_est = results[:, :, self.n_components :]
+            alpha_est = alpha_est - (1.0 - mask_components) * 1e9
+            alpha_loss_val = self.alpha_loss(alpha_est, mixture_probs)
+            mu_loss_val_ = self.mu_loss(mu_est, gaussian_means)  # [b, n, d]
+            mask = mask_components
+            mu_loss_sum_ = (mu_loss_val_ * mask.unsqueeze(-1)).mean(dim=-1).sum(dim=-1)
+            mu_loss_val = (mu_loss_sum_ / mask.sum(dim=1)).mean()
         return TGMMOutput(
             alpha_loss=alpha_loss_val,
             mu_loss=mu_loss_val,

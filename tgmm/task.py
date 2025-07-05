@@ -270,11 +270,15 @@ class IsotropicGaussianMixtureTask(Task):
         scale = self.scale or self._default_scale
         return (torch.ones(batch_size) * scale).view(-1, 1, 1)
 
-    def _sample_seq_mask(self, batch_size, n_sample):
+    def _sample_seq_mask(self, batch_size, n_sample, padding_side):
         n_max = n_sample
         n_min = n_sample // 2  # TODO: use more flexible strategies
         seq_lens = torch.randint(n_min, n_max + 1, (batch_size,))
-        return sequence_length_to_mask(seq_lens, max_len=n_sample)
+        return sequence_length_to_mask(
+            seq_lens,
+            max_len=n_sample,
+            padding_side=padding_side
+        )
 
     def _sample(self, n_sample, batch_size, mixture_probs, gaussian_means, scale):
         assignment = torch.multinomial(
@@ -314,6 +318,7 @@ class IsotropicGaussianMixtureTask(Task):
 
     def sample(self, n_sample, batch_size, *args, **kwargs):
         gen_mask = kwargs.pop("gen_mask", True)
+        padding_side = kwargs.pop("padding_side", "right")
         mixture_probs = self._sample_mixture_probs(batch_size)
         gaussian_means = self._sample_mean(batch_size)
         scale = self._sample_scale(batch_size)
@@ -332,7 +337,7 @@ class IsotropicGaussianMixtureTask(Task):
             scale,
         )
         if gen_mask:
-            mask_length = self._sample_seq_mask(batch_size, n_sample)
+            mask_length = self._sample_seq_mask(batch_size, n_sample, padding_side)
             task_sample.mask_length = mask_length
         return task_sample
 
