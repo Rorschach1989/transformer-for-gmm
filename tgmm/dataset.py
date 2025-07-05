@@ -58,7 +58,6 @@ class StaticGaussianMixtureDataset(Dataset):
     dataset_size: int
     task: IsotropicGaussianMixtureTask
     n_sample: int
-    padding_side: str = "right"
 
     def __post_init__(self):
         super(Dataset, self).__init__()
@@ -67,7 +66,6 @@ class StaticGaussianMixtureDataset(Dataset):
             n_sample=self.n_sample,
             batch_size=self.dataset_size,
             gen_mask=False,
-            padding_side=self.padding_side,
         )
         self._sample = sample
         self._sample_raw = sample.clone()

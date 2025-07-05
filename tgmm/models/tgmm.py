@@ -355,9 +355,12 @@ class MultiTaskInstructTGMMModel(nn.Module):
     TODO: Current impl considers only isotropic, maybe enrich later"""
 
     @staticmethod
-    def _prepare_backbone(pretrained_ckpt_path):
+    def _prepare_backbone(pretrained_ckpt_path, attn_implementation):
         # TODO: enable more pretrained models
-        model = Qwen3Model.from_pretrained(pretrained_ckpt_path)
+        model = Qwen3Model.from_pretrained(
+            pretrained_ckpt_path,
+            attn_implementation=attn_implementation
+        )
         return model
 
     def _map_component_ids(self, component_ids: torch.Tensor):
@@ -374,13 +377,17 @@ class MultiTaskInstructTGMMModel(nn.Module):
         task,
         pretrained_ckpt_path,
         ignore_text_embeddings=True,
+        attn_implementation="sdpa",  # using ``flash_attention_2`` requires left padding
     ):
         super(MultiTaskInstructTGMMModel, self).__init__()
         self.task = task
         self.n_components = self.task.max_n_components
         self.n_subtasks = self.task.n_subtasks
         self.subtask_components = self.task.subtask_components
-        self.encoder = self._prepare_backbone(pretrained_ckpt_path)
+        self.encoder = self._prepare_backbone(
+            pretrained_ckpt_path,
+            attn_implementation
+        )
         self.hidden_size = self.encoder.config.hidden_size
         self.data_projector = nn.Linear(
             self.task.dim,
