@@ -1,0 +1,37 @@
+task:
+  type: PhaseTransitionGaussianMixture
+  a_s:
+    - 1.1
+    - 2.2
+    - 3.3
+    - 4.4
+    - 5.5
+    - 6.6
+    - 7.7
+    - 8.8
+    - 9.9
+    - 11
+  b: 0.1
+  dim: 32
+model:
+  model_type: transformer
+  n_positions: 4096
+  n_embd: 128
+  n_layer: 12
+  n_head: 4
+train:
+  verbose: true
+  seed: 42
+  n_sample: 128
+  batch_size: 64
+  eval_every: 1000
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  num_train_steps: 10001
+eval:
+  n_sample:
+    - 32
+  batch_size: 128
+  ood_perturbation_scale: 0.0
+  strategy: dynamic
+  static_dataset_path: null

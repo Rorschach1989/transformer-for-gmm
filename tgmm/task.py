@@ -449,6 +449,7 @@ class SphericalGaussianMixtureTask(IsotropicGaussianMixtureTask):
     delta: float = 1.0  # Required param indicating l2-distance between means
     a: float = 1.0
     b: float = 1.0
+    _train: bool = True
 
     def train(self):
         self._train = True
