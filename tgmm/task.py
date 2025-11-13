@@ -21,6 +21,12 @@ class Task(object):
     def sample(self, n_sample, batch_size, *args, **kwargs):
         raise NotImplementedError
 
+    def train(self):
+        pass
+
+    def eval(self):
+        pass
+
 
 @dataclass
 class IsotropicGaussianMixtureSample(object):
@@ -444,6 +450,12 @@ class SphericalGaussianMixtureTask(IsotropicGaussianMixtureTask):
     a: float = 1.0
     b: float = 1.0
 
+    def train(self):
+        self._train = True
+
+    def eval(self):
+        self._train = False
+
     def _sample_mixture_probs(self, batch_size):
         r"""As recovery guarantees have nothing to do with mixture probs
         Use the optimistic setup"""
@@ -457,11 +469,14 @@ class SphericalGaussianMixtureTask(IsotropicGaussianMixtureTask):
         mean_sampled = (
             torch.stack([_mean_normed, -_mean_normed], dim=-1) * self.delta / 2
         )
-        # **Notes**: Transformer may take shortcuts to find that two opposite vector
-        # should be learned, break this
-        return mean_sampled + (
-            torch.randn(batch_size, self.dim) * self.delta
-        ).unsqueeze(-1)
+        if self._train:
+            # **Notes**: Transformer may take shortcuts to find that two opposite vector
+            # should be learned, break this during training
+            return mean_sampled + (
+                torch.randn(batch_size, self.dim) * self.delta
+            ).unsqueeze(-1)
+        else:
+            return mean_sampled
 
     @classmethod
     def abn_config(cls, a, b, n):
@@ -505,6 +520,14 @@ class MultiTaskGaussianMixtureTask(Task):
         self.dim = dim
         self.subtask_components = [task.n_components for task in self.tasks]
         self.max_n_components = max(self.subtask_components)
+
+    def train(self):
+        for task in self.tasks:
+            task.train()
+
+    def eval(self):
+        for task in self.tasks:
+            task.eval()
 
     @classmethod
     def abn_config(cls, a_s, b, n):

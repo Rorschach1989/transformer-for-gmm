@@ -374,7 +374,9 @@ def train(cfg, device_id, name: str = None):
     eval_results = []
     for step in pbar:
         if not step % cfg.train.eval_every:
+            task.eval()
             eval_results.append(evaluation_helper.evaluate(model, loss_meter, step))
+        task.train()
         task_sample = next(it).to(device=device, non_blocking=True)
         optimizer.zero_grad()
         model_output = model(task_sample)
